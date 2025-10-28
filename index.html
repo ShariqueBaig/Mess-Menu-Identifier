@@ -25,18 +25,33 @@
         border-radius: 20px;
         box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
         overflow: hidden;
+        position: relative;
       }
 
       .header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
         padding: 30px;
+        position: relative;
         text-align: center;
       }
 
       .header h1 {
         font-size: 2em;
         margin-bottom: 10px;
+      }
+
+      .admin-btn {
+        position: absolute;
+        right: 30px;
+        top: 28px;
+        background: rgba(255,255,255,0.12);
+        border: 1px solid rgba(255,255,255,0.18);
+        color: white;
+        padding: 8px 14px;
+        border-radius: 12px;
+        cursor: pointer;
+        font-weight: bold;
       }
 
       .header p {
@@ -57,6 +72,7 @@
         margin-bottom: 30px;
         cursor: pointer;
         transition: all 0.3s;
+        position: relative;
       }
 
       .upload-section:hover {
@@ -123,6 +139,63 @@
 
       .menu-display {
         display: none;
+      }
+
+      .nav-day-btn {
+        position: absolute;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        border: 2px solid rgba(255,255,255,0.12);
+        background: linear-gradient(135deg,#6b7df0 0%, #5b63d6 100%);
+        color: #fff;
+        font-size: 1.25em;
+        cursor: pointer;
+        box-shadow: 0 12px 30px rgba(55,63,172,0.28);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+        z-index: 1200;
+      }
+
+      .nav-day-btn:hover:not(:disabled) {
+        transform: scale(1.06);
+        box-shadow: 0 18px 40px rgba(55,63,172,0.36);
+      }
+
+      .nav-day-btn:disabled {
+        opacity: 0.45;
+        cursor: default;
+      }
+
+      #prevDayBtn { left: 16px; top: 45%; }
+      #nextDayBtn { right: 16px; top: 45%; }
+
+      #todayBtn {
+        position: absolute;
+        right: 18px;
+        bottom: 18px;
+        padding: 10px 14px;
+        border-radius: 10px;
+        border: none;
+        background: linear-gradient(90deg,#4f7cf6,#2f5bd6);
+        color: #fff;
+        cursor: pointer;
+        box-shadow: 0 10px 30px rgba(47,91,214,0.18);
+        font-weight: 600;
+        z-index: 40;
+        transition: transform 0.12s ease, box-shadow 0.12s ease;
+      }
+
+      #todayBtn:hover { transform: translateY(-3px); box-shadow: 0 16px 40px rgba(47,91,214,0.22); }
+
+      /* mobile: adjust button sizes */
+      @media (max-width: 640px) {
+        .nav-day-btn { width: 46px; height: 46px; font-size: 1.05em; }
+        #prevDayBtn { left: 8px; top: 45%; }
+        #nextDayBtn { right: 8px; top: 45%; }
+        #todayBtn { right: 12px; bottom: 18px; }
       }
 
       .current-info {
@@ -244,6 +317,8 @@
       <div class="content">
         <div
           class="upload-section"
+          id="uploadSection"
+          style="display: none"
           onclick="document.getElementById('pdfInput').click()"
         >
           <h2>📄 Upload Your Mess Menu PDF</h2>
@@ -259,9 +334,11 @@
           >
             Clear Saved Data
           </button>
+
+          
         </div>
 
-        <div class="date-input-section">
+        <div class="date-input-section" id="startDateSection" style="display:none;">
           <label for="startDate"
             >📅 When does Week 1 start? (Menu Start Date)</label
           >
@@ -275,7 +352,7 @@
 
         <div class="menu-display" id="menuDisplay">
           <div class="current-info">
-            <h2>📍 Current Status</h2>
+            <h2>📍 Current Status <span id="viewingDate" style="font-size:0.9rem;font-weight:400;display:block;margin-top:8px;opacity:0.95"></span></h2>
             <div class="info-grid">
               <div class="info-item">
                 <strong>Week</strong>
@@ -292,10 +369,17 @@
             </div>
           </div>
 
-          <div id="mealsContainer"></div>
+      <div id="mealsContainer"></div>
         </div>
+
+    <!-- nav buttons placed at container sides -->
+    <button id="prevDayBtn" class="nav-day-btn" title="Previous day">◀</button>
+    <button id="nextDayBtn" class="nav-day-btn" title="Next day">▶</button>
+    <button id="todayBtn" title="Go to Today">Today</button>
       </div>
     </div>
+
+    <button id="adminBtn" class="admin-btn">🔒 Admin</button>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     <script>
@@ -303,6 +387,7 @@
         "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
       let menuData = null;
+      let pdfDataUrl = null; // stores original PDF for viewing/downloading
 
       function updateTime() {
         const now = new Date();
@@ -322,53 +407,76 @@
       updateTime();
       setInterval(updateTime, 1000);
 
+      // Admin / persistence keys
+      const STORAGE_KEY = "messMenuData";
+      const ADMIN_KEY = "messAdminPassword";
+
       // Load saved data on page load
       window.addEventListener("DOMContentLoaded", () => {
+        setupAdminButton();
+        document.getElementById("pdfInput").addEventListener("change", handleFileSelect);
+        document.getElementById("startDate").addEventListener("change", () => {
+          saveStartDate();
+          displayMenu();
+        });
+
+        // nav buttons
+        const prev = document.getElementById("prevDayBtn");
+        const next = document.getElementById("nextDayBtn");
+        const today = document.getElementById("todayBtn");
+        if (prev) prev.addEventListener("click", () => { if (typeof currentViewOffsetDays === 'number') showOffset(currentViewOffsetDays - 1); });
+        if (next) next.addEventListener("click", () => { if (typeof currentViewOffsetDays === 'number') showOffset(currentViewOffsetDays + 1); });
+        if (today) today.addEventListener("click", () => { manualView = false; displayMenu(); });
+
         loadSavedData();
       });
 
-      document
-        .getElementById("pdfInput")
-        .addEventListener("change", handleFileSelect);
-      document.getElementById("startDate").addEventListener("change", () => {
-        saveStartDate();
-        displayMenu();
-      });
-
+      // --- persistence using localStorage (works in static hosting) ---
       function saveMenuData() {
-        if (menuData) {
-          try {
-            const dataToSave = {
-              menuData: menuData,
-              startDate: document.getElementById("startDate").value,
-              savedAt: new Date().toISOString(),
-            };
-            window.storage.set("messMenuData", JSON.stringify(dataToSave));
-            updateSavedStatus(true);
-          } catch (e) {
-            console.error("Error saving data:", e);
-          }
+        try {
+          const dataToSave = {
+            menuData: menuData,
+            startDate: document.getElementById("startDate").value,
+            savedAt: new Date().toISOString(),
+            pdfDataUrl: pdfDataUrl || null,
+          };
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
+          updateSavedStatus(true, new Date());
+          if (pdfDataUrl) addViewPdfButton(pdfDataUrl);
+        } catch (e) {
+          console.error("Error saving data:", e);
         }
       }
 
       function saveStartDate() {
-        if (menuData) {
-          saveMenuData();
+        // allow saving start date even if menu hasn't been uploaded yet
+        try {
+          const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+          existing.startDate = document.getElementById("startDate").value;
+          existing.savedAt = new Date().toISOString();
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
+          updateSavedStatus(true, new Date());
+        } catch (e) {
+          console.error(e);
         }
       }
 
-      async function loadSavedData() {
+      function loadSavedData() {
         try {
-          const result = await window.storage.get("messMenuData");
-          if (result && result.value) {
-            const savedData = JSON.parse(result.value);
-            menuData = savedData.menuData;
-            document.getElementById("startDate").value = savedData.startDate;
-
-            const savedDate = new Date(savedData.savedAt);
-            updateSavedStatus(true, savedDate);
-            displayMenu();
+          const raw = localStorage.getItem(STORAGE_KEY);
+          if (!raw) {
+            document.getElementById("message").innerHTML = '<div class="error">⚠️ Menu not set. Please ask an admin to upload the PDF.</div>';
+            return;
           }
+          const savedData = JSON.parse(raw);
+          if (savedData.menuData) menuData = savedData.menuData;
+          if (savedData.startDate) document.getElementById("startDate").value = savedData.startDate;
+          if (savedData.pdfDataUrl) {
+            pdfDataUrl = savedData.pdfDataUrl;
+            addViewPdfButton(pdfDataUrl);
+          }
+          if (savedData.savedAt) updateSavedStatus(true, new Date(savedData.savedAt));
+          displayMenu();
         } catch (e) {
           console.log("No saved data found or error loading:", e);
         }
@@ -391,18 +499,33 @@
         }
       }
 
-      async function clearSavedData() {
+      function addViewPdfButton(dataUrl) {
+        const statusDiv = document.getElementById("savedStatus");
+        const existing = document.getElementById("viewPdfBtn");
+        if (existing) return;
+        const btn = document.createElement("div");
+        btn.style.marginTop = "12px";
+        btn.innerHTML = `<a id=\"viewPdfBtn\" href=\"${dataUrl}\" target=\"_blank\" style=\"display:inline-block;padding:8px 12px;background:#667eea;color:#fff;border-radius:8px;text-decoration:none;\">📄 View original PDF</a> <a href=\"${dataUrl}\" download=\"mess_menu.pdf\" style=\"display:inline-block;margin-left:8px;padding:8px 12px;background:#764ba2;color:#fff;border-radius:8px;text-decoration:none;\">⬇️ Download</a>`;
+        statusDiv.appendChild(btn);
+      }
+
+      function removeViewPdfButton() {
+        const btn = document.getElementById("viewPdfBtn");
+        if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+      }
+
+      function clearSavedData() {
         if (confirm("Are you sure you want to clear the saved menu data?")) {
           try {
-            await window.storage.delete("messMenuData");
+            localStorage.removeItem(STORAGE_KEY);
             menuData = null;
+            pdfDataUrl = null;
+            removeViewPdfButton();
             document.getElementById("menuDisplay").style.display = "none";
-            document.getElementById("message").innerHTML =
-              '<div class="success">✅ Saved data cleared!</div>';
+            document.getElementById("message").innerHTML = '<div class="success">✅ Saved data cleared!</div>';
             updateSavedStatus(false);
           } catch (e) {
-            document.getElementById("message").innerHTML =
-              '<div class="error">❌ Error clearing data</div>';
+            document.getElementById("message").innerHTML = '<div class="error">❌ Error clearing data</div>';
           }
         }
       }
@@ -411,34 +534,75 @@
         const file = e.target.files[0];
         if (!file) return;
 
-        document.getElementById("message").innerHTML =
-          '<div class="success">⏳ Reading PDF...</div>';
+        document.getElementById("message").innerHTML = '<div class="success">⏳ Reading PDF...</div>';
 
         try {
+          // read arrayBuffer for pdf.js and dataURL for viewing
           const arrayBuffer = await file.arrayBuffer();
-          const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+          pdfDataUrl = await fileToDataURL(file);
+
+          const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
           let fullText = "";
 
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
             const textContent = await page.getTextContent();
-            const pageText = textContent.items
-              .map((item) => item.str)
-              .join(" ");
+            const pageText = textContent.items.map((item) => item.str).join(" ");
             fullText += pageText + "\n";
           }
 
           parseMenu(fullText);
           saveMenuData();
-          document.getElementById("message").innerHTML =
-            '<div class="success">✅ PDF loaded and saved successfully!</div>';
+          document.getElementById("message").innerHTML = '<div class="success">✅ PDF loaded and saved successfully!</div>';
+          addViewPdfButton(pdfDataUrl);
           displayMenu();
         } catch (error) {
-          document.getElementById("message").innerHTML =
-            '<div class="error">❌ Error reading PDF: ' +
-            error.message +
-            "</div>";
+          document.getElementById("message").innerHTML = '<div class="error">❌ Error reading PDF: ' + error.message + "</div>";
         }
+      }
+
+      function fileToDataURL(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result);
+          reader.onerror = (err) => reject(err);
+          reader.readAsDataURL(file);
+        });
+      }
+
+      // --- ADMIN UI ---
+      function setupAdminButton() {
+        const adminBtn = document.getElementById("adminBtn");
+        adminBtn.addEventListener("click", promptAdmin);
+        // ensure a default password exists (only stored locally)
+        if (!localStorage.getItem(ADMIN_KEY)) {
+          localStorage.setItem(ADMIN_KEY, "admin123");
+        }
+
+        // overlay unlock button (same flow as admin button)
+        const overlayBtn = document.getElementById("overlayUnlockBtn");
+        if (overlayBtn) overlayBtn.addEventListener("click", promptAdmin);
+      }
+
+      function promptAdmin() {
+        const stored = localStorage.getItem(ADMIN_KEY) || "admin123";
+        const entered = prompt("Enter admin password to manage menu:");
+        if (entered === null) return; // cancelled
+        if (entered === stored) {
+          unlockAdmin();
+        } else {
+          alert("Incorrect password");
+        }
+      }
+
+      function unlockAdmin() {
+        const uploadSection = document.getElementById("uploadSection");
+        if (uploadSection) uploadSection.style.display = "block";
+        const startSection = document.getElementById("startDateSection");
+        if (startSection) startSection.style.display = "block";
+        const startInput = document.getElementById("startDate");
+        if (startInput) startInput.disabled = false;
+        alert("Admin unlocked. You can now upload a new PDF and set the start date.");
       }
 
       function parseMenu(text) {
@@ -619,30 +783,39 @@
         }
 
         const startDate = new Date(document.getElementById("startDate").value);
-        const now = new Date();
+        // target date is today or the manual viewed offset
+        const targetDate = new Date();
+        if (manualView) {
+          targetDate.setDate(targetDate.getDate() + viewedOffsetDays);
+        }
 
-        const diffTime = now - startDate;
+        const diffTime = targetDate - startDate;
         const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
 
-        const weekIndex = Math.floor(diffDays / 7) % 4;
-        const dayIndex = diffDays % 7;
+        const totalDays = menuData.weeks.length * 7;
 
-        if (weekIndex < 0 || weekIndex >= menuData.weeks.length) {
+        if (diffDays < 0 || diffDays >= totalDays) {
           document.getElementById("message").innerHTML =
-            '<div class="error">❌ Current date is outside menu range</div>';
+            '<div class="error">❌ Date is outside menu range</div>';
+          // update nav button states
+          updateNavButtons(diffDays, totalDays);
           return;
         }
 
+        const weekIndex = Math.floor(diffDays / 7);
+        const dayIndex = diffDays % 7;
+
         const week = menuData.weeks[weekIndex];
-        if (!week.days[dayIndex]) {
+        if (!week || !week.days[dayIndex]) {
           document.getElementById("message").innerHTML =
-            '<div class="error">❌ No menu data for today</div>';
+            '<div class="error">❌ No menu data for this date</div>';
+          updateNavButtons(diffDays, totalDays);
           return;
         }
 
         const today = week.days[dayIndex];
         const currentMeal = getCurrentMealTime();
-        const isWeekend = now.getDay() === 0;
+        const isWeekend = targetDate.getDay() === 0;
 
         document.getElementById("weekNum").textContent = `Week ${
           weekIndex + 1
@@ -652,6 +825,13 @@
           currentMeal === "none"
             ? "No meal time"
             : currentMeal.charAt(0).toUpperCase() + currentMeal.slice(1);
+
+        // show which date we're viewing
+        const viewing = document.getElementById("viewingDate");
+        if (viewing) {
+          const opts = { weekday: "long", year: "numeric", month: "short", day: "numeric" };
+          viewing.textContent = targetDate.toLocaleDateString("en-US", opts) + (manualView ? " (viewing)" : "");
+        }
 
         const mealsContainer = document.getElementById("mealsContainer");
         mealsContainer.innerHTML = "";
@@ -667,7 +847,7 @@
         ];
 
         meals.forEach((meal) => {
-          const isActive = currentMeal === meal.key;
+          const isActive = currentMeal === meal.key && !manualView; // NOW SERVING only when auto-viewing today
           const card = document.createElement("div");
           card.className = "meal-card" + (isActive ? " active" : "");
 
@@ -690,10 +870,38 @@
         });
 
         document.getElementById("menuDisplay").style.display = "block";
+
+        // update nav button states
+        updateNavButtons(diffDays, totalDays);
+        // reflect current offset
+        currentViewOffsetDays = manualView ? viewedOffsetDays : 0;
+      }
+
+      function updateNavButtons(diffDays, totalDays) {
+        const prev = document.getElementById("prevDayBtn");
+        const next = document.getElementById("nextDayBtn");
+        if (prev) prev.disabled = diffDays <= 0;
+        if (next) next.disabled = diffDays >= totalDays - 1;
+      }
+
+      // navigation state
+      let manualView = false;
+      let viewedOffsetDays = 0; // offset from today; 0 = today
+
+      function showOffset(offset) {
+        manualView = true;
+        viewedOffsetDays = offset;
+        currentViewOffsetDays = offset;
+        displayMenu();
       }
 
       // Update display every minute
-      setInterval(displayMenu, 60000);
+      setInterval(() => {
+        if (!manualView) displayMenu();
+      }, 60000);
+
+      // expose currentViewOffsetDays for listeners
+      let currentViewOffsetDays = 0;
     </script>
   </body>
 </html>
