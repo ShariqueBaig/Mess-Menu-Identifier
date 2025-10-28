@@ -1,0 +1,699 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mess Menu Tracker</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        min-height: 100vh;
+        padding: 20px;
+      }
+
+      .container {
+        max-width: 800px;
+        margin: 0 auto;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        overflow: hidden;
+      }
+
+      .header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+      }
+
+      .header h1 {
+        font-size: 2em;
+        margin-bottom: 10px;
+      }
+
+      .header p {
+        opacity: 0.9;
+        font-size: 1.1em;
+      }
+
+      .content {
+        padding: 30px;
+      }
+
+      .upload-section {
+        text-align: center;
+        padding: 40px 20px;
+        border: 3px dashed #667eea;
+        border-radius: 15px;
+        background: #f8f9ff;
+        margin-bottom: 30px;
+        cursor: pointer;
+        transition: all 0.3s;
+      }
+
+      .upload-section:hover {
+        background: #f0f2ff;
+        border-color: #764ba2;
+      }
+
+      .upload-section input {
+        display: none;
+      }
+
+      .upload-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 15px 40px;
+        border: none;
+        border-radius: 30px;
+        font-size: 1.1em;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .upload-btn:hover {
+        transform: scale(1.05);
+      }
+
+      .clear-btn {
+        background: #e74c3c;
+        color: white;
+        padding: 10px 25px;
+        border: none;
+        border-radius: 20px;
+        font-size: 0.9em;
+        cursor: pointer;
+        margin-top: 15px;
+        transition: transform 0.2s;
+      }
+
+      .clear-btn:hover {
+        transform: scale(1.05);
+      }
+
+      .date-input-section {
+        margin: 20px 0;
+        padding: 20px;
+        background: #f8f9ff;
+        border-radius: 10px;
+      }
+
+      .date-input-section label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: bold;
+        color: #667eea;
+      }
+
+      .date-input-section input {
+        width: 100%;
+        padding: 12px;
+        border: 2px solid #667eea;
+        border-radius: 8px;
+        font-size: 1em;
+      }
+
+      .menu-display {
+        display: none;
+      }
+
+      .current-info {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 25px;
+      }
+
+      .current-info h2 {
+        font-size: 1.5em;
+        margin-bottom: 15px;
+      }
+
+      .info-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+      }
+
+      .info-item {
+        background: rgba(255, 255, 255, 0.2);
+        padding: 15px;
+        border-radius: 10px;
+        text-align: center;
+      }
+
+      .info-item strong {
+        display: block;
+        font-size: 0.9em;
+        opacity: 0.9;
+        margin-bottom: 5px;
+      }
+
+      .info-item span {
+        font-size: 1.3em;
+        font-weight: bold;
+      }
+
+      .meal-card {
+        background: #f8f9ff;
+        padding: 25px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        border-left: 5px solid #667eea;
+      }
+
+      .meal-card.active {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-left: 5px solid #fff;
+        box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+      }
+
+      .meal-card h3 {
+        font-size: 1.5em;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .meal-card.active h3::before {
+        content: "🍽️";
+        font-size: 1.2em;
+      }
+
+      .meal-items {
+        font-size: 1.1em;
+        line-height: 1.8;
+      }
+
+      .status-badge {
+        display: inline-block;
+        padding: 5px 15px;
+        border-radius: 20px;
+        font-size: 0.8em;
+        font-weight: bold;
+        margin-left: 10px;
+        background: rgba(255, 255, 255, 0.3);
+      }
+
+      .error {
+        background: #fee;
+        color: #c33;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border-left: 4px solid #c33;
+      }
+
+      .success {
+        background: #efe;
+        color: #3c3;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border-left: 4px solid #3c3;
+      }
+
+      .saved-info {
+        background: #e8f5e9;
+        color: #2e7d32;
+        padding: 15px;
+        border-radius: 10px;
+        margin: 20px 0;
+        border-left: 4px solid #2e7d32;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🍽️ Mess Menu Tracker</h1>
+        <p id="currentTime"></p>
+      </div>
+
+      <div class="content">
+        <div
+          class="upload-section"
+          onclick="document.getElementById('pdfInput').click()"
+        >
+          <h2>📄 Upload Your Mess Menu PDF</h2>
+          <p style="margin: 15px 0; color: #666">
+            Click here or drag your PDF file
+          </p>
+          <button class="upload-btn">Choose PDF File</button>
+          <input type="file" id="pdfInput" accept=".pdf" />
+          <div id="savedStatus"></div>
+          <button
+            class="clear-btn"
+            onclick="event.stopPropagation(); clearSavedData()"
+          >
+            Clear Saved Data
+          </button>
+        </div>
+
+        <div class="date-input-section">
+          <label for="startDate"
+            >📅 When does Week 1 start? (Menu Start Date)</label
+          >
+          <input type="date" id="startDate" value="2025-10-01" />
+          <p style="margin-top: 10px; color: #666; font-size: 0.9em">
+            This is usually the first day of the month shown in your PDF
+          </p>
+        </div>
+
+        <div id="message"></div>
+
+        <div class="menu-display" id="menuDisplay">
+          <div class="current-info">
+            <h2>📍 Current Status</h2>
+            <div class="info-grid">
+              <div class="info-item">
+                <strong>Week</strong>
+                <span id="weekNum">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Day</strong>
+                <span id="dayName">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Current Meal</strong>
+                <span id="mealTime">-</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="mealsContainer"></div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+      pdfjsLib.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+      let menuData = null;
+
+      function updateTime() {
+        const now = new Date();
+        const options = {
+          weekday: "long",
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+          hour: "2-digit",
+          minute: "2-digit",
+          second: "2-digit",
+        };
+        document.getElementById("currentTime").textContent =
+          now.toLocaleDateString("en-US", options);
+      }
+
+      updateTime();
+      setInterval(updateTime, 1000);
+
+      // Load saved data on page load
+      window.addEventListener("DOMContentLoaded", () => {
+        loadSavedData();
+      });
+
+      document
+        .getElementById("pdfInput")
+        .addEventListener("change", handleFileSelect);
+      document.getElementById("startDate").addEventListener("change", () => {
+        saveStartDate();
+        displayMenu();
+      });
+
+      function saveMenuData() {
+        if (menuData) {
+          try {
+            const dataToSave = {
+              menuData: menuData,
+              startDate: document.getElementById("startDate").value,
+              savedAt: new Date().toISOString(),
+            };
+            window.storage.set("messMenuData", JSON.stringify(dataToSave));
+            updateSavedStatus(true);
+          } catch (e) {
+            console.error("Error saving data:", e);
+          }
+        }
+      }
+
+      function saveStartDate() {
+        if (menuData) {
+          saveMenuData();
+        }
+      }
+
+      async function loadSavedData() {
+        try {
+          const result = await window.storage.get("messMenuData");
+          if (result && result.value) {
+            const savedData = JSON.parse(result.value);
+            menuData = savedData.menuData;
+            document.getElementById("startDate").value = savedData.startDate;
+
+            const savedDate = new Date(savedData.savedAt);
+            updateSavedStatus(true, savedDate);
+            displayMenu();
+          }
+        } catch (e) {
+          console.log("No saved data found or error loading:", e);
+        }
+      }
+
+      function updateSavedStatus(saved, date) {
+        const statusDiv = document.getElementById("savedStatus");
+        if (saved && date) {
+          const dateStr = date.toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          });
+          statusDiv.innerHTML = `<div class="saved-info" style="margin-top: 15px;">✅ Menu saved! Last updated: ${dateStr}</div>`;
+        } else if (saved) {
+          statusDiv.innerHTML = `<div class="saved-info" style="margin-top: 15px;">✅ Menu saved successfully!</div>`;
+        } else {
+          statusDiv.innerHTML = "";
+        }
+      }
+
+      async function clearSavedData() {
+        if (confirm("Are you sure you want to clear the saved menu data?")) {
+          try {
+            await window.storage.delete("messMenuData");
+            menuData = null;
+            document.getElementById("menuDisplay").style.display = "none";
+            document.getElementById("message").innerHTML =
+              '<div class="success">✅ Saved data cleared!</div>';
+            updateSavedStatus(false);
+          } catch (e) {
+            document.getElementById("message").innerHTML =
+              '<div class="error">❌ Error clearing data</div>';
+          }
+        }
+      }
+
+      async function handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        document.getElementById("message").innerHTML =
+          '<div class="success">⏳ Reading PDF...</div>';
+
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+          let fullText = "";
+
+          for (let i = 1; i <= pdf.numPages; i++) {
+            const page = await pdf.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+              .map((item) => item.str)
+              .join(" ");
+            fullText += pageText + "\n";
+          }
+
+          parseMenu(fullText);
+          saveMenuData();
+          document.getElementById("message").innerHTML =
+            '<div class="success">✅ PDF loaded and saved successfully!</div>';
+          displayMenu();
+        } catch (error) {
+          document.getElementById("message").innerHTML =
+            '<div class="error">❌ Error reading PDF: ' +
+            error.message +
+            "</div>";
+        }
+      }
+
+      function parseMenu(text) {
+        menuData = {
+          weeks: [],
+        };
+
+        // Clean up the text
+        text = text.replace(/\s+/g, " ");
+
+        // Find all week sections
+        const weekPattern = /Week (\d+)(.*?)(?=Week \d+|$)/gs;
+        const weekMatches = [...text.matchAll(weekPattern)];
+
+        const days = [
+          "Monday",
+          "Tuesday",
+          "Wednesday",
+          "Thursday",
+          "Friday",
+          "Saturday",
+          "Sunday",
+        ];
+
+        for (let w = 0; w < weekMatches.length && w < 4; w++) {
+          const weekText = weekMatches[w][2];
+          const weekData = { days: [] };
+
+          // Extract the table content for each day
+          for (let d = 0; d < days.length; d++) {
+            const day = days[d];
+
+            // Pattern to match: Day Breakfast* [lunch content] [dinner content]
+            // Looking for content between current day and next day (or end)
+            const nextDay = days[d + 1];
+            let pattern;
+
+            if (nextDay) {
+              pattern = new RegExp(
+                day + "\\s+Breakfast\\*?\\s+(.*?)\\s+" + nextDay,
+                "s"
+              );
+            } else {
+              pattern = new RegExp(
+                day + "\\s+Breakfast\\*?\\s+(.*?)(?=Breakfast\\*\\s*:|Week|$)",
+                "s"
+              );
+            }
+
+            const match = weekText.match(pattern);
+
+            if (match) {
+              let content = match[1].trim();
+
+              // Remove extra spaces and normalize
+              content = content.replace(/\s+/g, " ").trim();
+
+              let lunch = "Not available";
+              let dinner = "Not available";
+
+              // Split content into words and look for meal separators
+              // The format is usually: [lunch items] [dinner items]
+              // We need to find where lunch ends and dinner begins
+
+              // Common dinner keywords to split on
+              const dinnerKeywords = [
+                "Biryani",
+                "Nihari",
+                "Haleem",
+                "Karahi",
+                "Korma",
+                "Handi",
+                "Qeema",
+                "Pulao",
+                "Palak",
+                "Murgh Channa",
+                "Special",
+                "Nuggets",
+                "Macaroni",
+                "Pasta",
+                "Gosht",
+              ];
+
+              // Try to intelligently split lunch and dinner
+              let splitIndex = -1;
+
+              // Look for the last occurrence of common meal items
+              for (const keyword of dinnerKeywords) {
+                const regex = new RegExp("\\b" + keyword + "\\b", "i");
+                const keywordMatch = content.match(regex);
+                if (keywordMatch) {
+                  const idx = content.lastIndexOf(keywordMatch[0]);
+                  if (idx > splitIndex) {
+                    splitIndex = idx;
+                  }
+                }
+              }
+
+              if (splitIndex > 0) {
+                // Find the start of the word containing the split
+                let wordStart = splitIndex;
+                while (wordStart > 0 && content[wordStart - 1] !== " ") {
+                  wordStart--;
+                }
+
+                lunch = content.substring(0, wordStart).trim();
+                dinner = content.substring(wordStart).trim();
+              } else {
+                // Fallback: split roughly in half
+                const words = content.split(" ");
+                const mid = Math.floor(words.length / 2);
+                lunch = words.slice(0, mid).join(" ");
+                dinner = words.slice(mid).join(" ");
+              }
+
+              // Clean up the meals
+              lunch = lunch || "Not available";
+              dinner = dinner || "Not available";
+
+              const dayData = {
+                name: day,
+                breakfast:
+                  day === "Sunday"
+                    ? "Special Breakfast (Halwa + Puri/Kulchay + Channa + Banana Shake/Lassi)"
+                    : "Standard Breakfast (Half fry, Full fry, Omlete, Khakina, Bread, Yoghurt, Blueband, Tea, Paratha, Chipati)",
+                lunch: lunch,
+                dinner: dinner,
+              };
+
+              weekData.days.push(dayData);
+            }
+          }
+
+          if (weekData.days.length > 0) {
+            menuData.weeks.push(weekData);
+          }
+        }
+      }
+
+      function getCurrentMealTime() {
+        const now = new Date();
+        const hour = now.getHours();
+        const minute = now.getMinutes();
+        const totalMinutes = hour * 60 + minute;
+        const day = now.getDay(); // 0 = Sunday
+
+        // Breakfast: 7:00-9:30 weekdays, 10:00-11:15 Sunday
+        if (day === 0) {
+          // Sunday
+          if (totalMinutes >= 600 && totalMinutes < 675) {
+            // 10:00 AM - 11:15 AM
+            return "breakfast";
+          }
+        } else {
+          // Weekdays
+          if (totalMinutes >= 420 && totalMinutes < 570) {
+            // 7:00 AM - 9:30 AM
+            return "breakfast";
+          }
+        }
+
+        // Lunch: 1:00 PM - 3:00 PM (13:00 - 15:00)
+        if (totalMinutes >= 780 && totalMinutes < 900) {
+          return "lunch";
+        }
+
+        // Dinner: 8:00 PM - 10:00 PM (20:00 - 22:00)
+        if (totalMinutes >= 1200 && totalMinutes < 1320) {
+          return "dinner";
+        }
+
+        return "none";
+      }
+
+      function displayMenu() {
+        if (!menuData || !menuData.weeks || menuData.weeks.length === 0) {
+          return;
+        }
+
+        const startDate = new Date(document.getElementById("startDate").value);
+        const now = new Date();
+
+        const diffTime = now - startDate;
+        const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+        const weekIndex = Math.floor(diffDays / 7) % 4;
+        const dayIndex = diffDays % 7;
+
+        if (weekIndex < 0 || weekIndex >= menuData.weeks.length) {
+          document.getElementById("message").innerHTML =
+            '<div class="error">❌ Current date is outside menu range</div>';
+          return;
+        }
+
+        const week = menuData.weeks[weekIndex];
+        if (!week.days[dayIndex]) {
+          document.getElementById("message").innerHTML =
+            '<div class="error">❌ No menu data for today</div>';
+          return;
+        }
+
+        const today = week.days[dayIndex];
+        const currentMeal = getCurrentMealTime();
+        const isWeekend = now.getDay() === 0;
+
+        document.getElementById("weekNum").textContent = `Week ${
+          weekIndex + 1
+        }`;
+        document.getElementById("dayName").textContent = today.name;
+        document.getElementById("mealTime").textContent =
+          currentMeal === "none"
+            ? "No meal time"
+            : currentMeal.charAt(0).toUpperCase() + currentMeal.slice(1);
+
+        const mealsContainer = document.getElementById("mealsContainer");
+        mealsContainer.innerHTML = "";
+
+        const breakfastTime = isWeekend
+          ? "10:00 AM - 11:15 AM"
+          : "7:00 AM - 9:30 AM";
+
+        const meals = [
+          { name: "Breakfast", time: breakfastTime, key: "breakfast" },
+          { name: "Lunch", time: "1:00 PM - 3:00 PM", key: "lunch" },
+          { name: "Dinner", time: "8:00 PM - 10:00 PM", key: "dinner" },
+        ];
+
+        meals.forEach((meal) => {
+          const isActive = currentMeal === meal.key;
+          const card = document.createElement("div");
+          card.className = "meal-card" + (isActive ? " active" : "");
+
+          card.innerHTML = `
+                    <h3>
+                        ${meal.name}
+                        ${
+                          isActive
+                            ? '<span class="status-badge">NOW SERVING</span>'
+                            : ""
+                        }
+                    </h3>
+                    <p style="opacity: 0.8; margin-bottom: 15px;">${
+                      meal.time
+                    }</p>
+                    <div class="meal-items">${today[meal.key]}</div>
+                `;
+
+          mealsContainer.appendChild(card);
+        });
+
+        document.getElementById("menuDisplay").style.display = "block";
+      }
+
+      // Update display every minute
+      setInterval(displayMenu, 60000);
+    </script>
+  </body>
+</html>
