@@ -1,0 +1,29 @@
+{
+  "name": "mess-menu-identifier",
+  "version": "1.0.0",
+  "description": "Mess Menu Tracker with secure admin authentication",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "generate-hash": "node -e \"const bcrypt = require('bcrypt'); const pw = process.argv[1]; bcrypt.hash(pw, 10, (e,h) => console.log('Hash:', h));\" "
+  },
+  "keywords": [
+    "menu",
+    "tracker",
+    "pdf"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.18.2",
+    "bcrypt": "^5.1.1",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.0.1"
+  }
+}
