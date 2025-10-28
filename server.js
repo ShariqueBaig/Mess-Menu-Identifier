@@ -16,7 +16,19 @@ const MENU_DATA_PATH = path.join(__dirname, 'menu-data.json');
 // Middleware
 app.use(cors());
 app.use(express.json({ limit: '50mb' })); // Increase limit for PDF data URLs
-app.use(express.static(path.join(__dirname)));
+
+// Serve static files with proper MIME types
+app.use(express.static(path.join(__dirname), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.css')) {
+      res.setHeader('Content-Type', 'text/css');
+    } else if (filePath.endsWith('.js')) {
+      res.setHeader('Content-Type', 'application/javascript');
+    } else if (filePath.endsWith('.html')) {
+      res.setHeader('Content-Type', 'text/html');
+    }
+  }
+}));
 
 // Serve static files
 app.get('/', (req, res) => {
