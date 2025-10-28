@@ -40,7 +40,8 @@ window.addEventListener("DOMContentLoaded", () => {
   document.getElementById("pdfInput").addEventListener("change", handleFileSelect);
   
   document.getElementById("startDate").addEventListener("change", () => {
-    saveStartDate();
+    const startDate = document.getElementById("startDate").value;
+    saveStartDate(startDate);
     displayMenu();
   });
 
@@ -96,11 +97,15 @@ async function handleFileSelect(e) {
     setMenuData(parsedData);
     setPdfDataUrl(dataUrl);
     
-    saveMenuData();
-    document.getElementById("message").innerHTML =
-      '<div class="success">✅ PDF loaded and saved successfully!</div>';
-    addViewPdfButton(dataUrl);
-    displayMenu();
+    const startDate = document.getElementById("startDate").value;
+    const saved = await saveMenuData(parsedData, startDate, dataUrl);
+    
+    if (saved) {
+      document.getElementById("message").innerHTML =
+        '<div class="success">✅ PDF loaded and saved successfully!</div>';
+      addViewPdfButton(dataUrl);
+      displayMenu();
+    }
   } catch (error) {
     document.getElementById("message").innerHTML =
       '<div class="error">❌ Error reading PDF: ' + error.message + "</div>";

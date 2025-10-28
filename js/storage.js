@@ -1,56 +1,123 @@
-// Storage and persistence logic
-import { STORAGE_KEY, menuData, pdfDataUrl, setMenuData, setPdfDataUrl, displayMenu } from './menu.js';
+// Storage and persistence logic - now using server API
+import { setMenuData, setPdfDataUrl, displayMenu } from './menu.js';
 
-export function saveMenuData() {
+const API_BASE = window.location.origin.includes('localhost') 
+  ? 'http://localhost:3000/api' 
+  : '/api';
+
+export async function saveMenuData(menuData, startDate, pdfDataUrl) {
   try {
-    const dataToSave = {
-      menuData: menuData,
-      startDate: document.getElementById("startDate").value,
-      savedAt: new Date().toISOString(),
-      pdfDataUrl: pdfDataUrl || null,
-    };
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(dataToSave));
-    updateSavedStatus(true, new Date());
-    if (pdfDataUrl) addViewPdfButton(pdfDataUrl);
-  } catch (e) {
-    console.error("Error saving data:", e);
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('Admin authentication required');
+    }
+
+    const response = await fetch(`${API_BASE}/menu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        menuData,
+        startDate,
+        pdfDataUrl: pdfDataUrl || null
+      })
+    });
+
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      updateSavedStatus(true, new Date(result.savedAt));
+      if (pdfDataUrl) addViewPdfButton(pdfDataUrl);
+      return true;
+    } else {
+      throw new Error(result.message || 'Failed to save menu');
+    }
+  } catch (error) {
+    console.error("Error saving data:", error);
+    document.getElementById("message").innerHTML = 
+      `<div class="error">❌ Error saving menu: ${error.message}</div>`;
+    return false;
   }
 }
 
-export function saveStartDate() {
-  // allow saving start date even if menu hasn't been uploaded yet
+export async function saveStartDate(startDate) {
   try {
-    const existing = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    existing.startDate = document.getElementById("startDate").value;
-    existing.savedAt = new Date().toISOString();
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(existing));
-    updateSavedStatus(true, new Date());
-  } catch (e) {
-    console.error(e);
-  }
-}
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('Admin authentication required');
+    }
 
-export function loadSavedData() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      document.getElementById("message").innerHTML =
-        '<div class="error">⚠️ Menu not set. Please ask an admin to upload the PDF.</div>';
+    // Get existing menu data first
+    const existingData = await loadSavedData(false);
+    if (!existingData) {
+      // No existing menu, just update UI
+      document.getElementById("startDate").value = startDate;
       return;
     }
-    const savedData = JSON.parse(raw);
-    if (savedData.menuData) setMenuData(savedData.menuData);
-    if (savedData.startDate)
-      document.getElementById("startDate").value = savedData.startDate;
-    if (savedData.pdfDataUrl) {
-      setPdfDataUrl(savedData.pdfDataUrl);
-      addViewPdfButton(savedData.pdfDataUrl);
+
+    // Save with updated start date
+    const response = await fetch(`${API_BASE}/menu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        menuData: existingData.menuData,
+        startDate: startDate,
+        pdfDataUrl: existingData.pdfDataUrl
+      })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+      updateSavedStatus(true, new Date(result.savedAt));
     }
-    if (savedData.savedAt)
-      updateSavedStatus(true, new Date(savedData.savedAt));
-    displayMenu();
-  } catch (e) {
-    console.log("No saved data found or error loading:", e);
+  } catch (error) {
+    console.error("Error saving start date:", error);
+  }
+}
+
+export async function loadSavedData(updateUI = true) {
+  try {
+    const response = await fetch(`${API_BASE}/menu`);
+    const result = await response.json();
+
+    if (!response.ok || !result.success || !result.data) {
+      if (updateUI) {
+        document.getElementById("message").innerHTML = 
+          '<div class="error">⚠️ Menu not set. Please ask an admin to upload the PDF.</div>';
+      }
+      return null;
+    }
+
+    const savedData = result.data;
+    
+    if (updateUI) {
+      if (savedData.menuData) setMenuData(savedData.menuData);
+      if (savedData.startDate) {
+        document.getElementById("startDate").value = savedData.startDate;
+      }
+      if (savedData.pdfDataUrl) {
+        setPdfDataUrl(savedData.pdfDataUrl);
+        addViewPdfButton(savedData.pdfDataUrl);
+      }
+      if (savedData.savedAt) {
+        updateSavedStatus(true, new Date(savedData.savedAt));
+      }
+      displayMenu();
+    }
+    
+    return savedData;
+  } catch (error) {
+    console.error("Error loading menu data:", error);
+    if (updateUI) {
+      document.getElementById("message").innerHTML = 
+        '<div class="error">❌ Error loading menu. Please check your connection.</div>';
+    }
+    return null;
   }
 }
 
@@ -86,20 +153,39 @@ export function removeViewPdfButton() {
   if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
 }
 
-export function clearSavedData() {
+export async function clearSavedData() {
   if (confirm("Are you sure you want to clear the saved menu data?")) {
     try {
-      localStorage.removeItem(STORAGE_KEY);
-      setMenuData(null);
-      setPdfDataUrl(null);
-      removeViewPdfButton();
-      document.getElementById("menuDisplay").style.display = "none";
+      const token = sessionStorage.getItem('adminToken');
+      if (!token) {
+        alert('Admin authentication required');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/menu`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        setMenuData(null);
+        setPdfDataUrl(null);
+        removeViewPdfButton();
+        document.getElementById("menuDisplay").style.display = "none";
+        document.getElementById("message").innerHTML =
+          '<div class="success">✅ Saved data cleared!</div>';
+        updateSavedStatus(false);
+      } else {
+        throw new Error(result.message || 'Failed to clear data');
+      }
+    } catch (error) {
+      console.error("Error clearing data:", error);
       document.getElementById("message").innerHTML =
-        '<div class="success">✅ Saved data cleared!</div>';
-      updateSavedStatus(false);
-    } catch (e) {
-      document.getElementById("message").innerHTML =
-        '<div class="error">❌ Error clearing data</div>';
+        `<div class="error">❌ Error clearing data: ${error.message}</div>`;
     }
   }
 }

@@ -4,14 +4,18 @@ const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs').promises;
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// File path for storing menu data
+const MENU_DATA_PATH = path.join(__dirname, 'menu-data.json');
+
 // Middleware
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '50mb' })); // Increase limit for PDF data URLs
 app.use(express.static(path.join(__dirname)));
 
 // Serve static files
@@ -85,6 +89,65 @@ function verifyAdminToken(req, res, next) {
 // Example protected route (for future use)
 app.get('/api/admin/status', verifyAdminToken, (req, res) => {
   res.json({ success: true, message: 'Admin authenticated' });
+});
+
+// --- MENU DATA ENDPOINTS ---
+
+// Get menu data (public - anyone can read)
+app.get('/api/menu', async (req, res) => {
+  try {
+    const data = await fs.readFile(MENU_DATA_PATH, 'utf8');
+    const menuData = JSON.parse(data);
+    res.json({ success: true, data: menuData });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      // File doesn't exist yet
+      res.json({ success: false, message: 'No menu data available yet' });
+    } else {
+      console.error('Error reading menu data:', error);
+      res.status(500).json({ success: false, message: 'Error reading menu data' });
+    }
+  }
+});
+
+// Save menu data (protected - admin only)
+app.post('/api/menu', verifyAdminToken, async (req, res) => {
+  try {
+    const { menuData, startDate, pdfDataUrl } = req.body;
+    
+    if (!menuData || !startDate) {
+      return res.status(400).json({ success: false, message: 'Menu data and start date required' });
+    }
+
+    const dataToSave = {
+      menuData,
+      startDate,
+      pdfDataUrl: pdfDataUrl || null,
+      savedAt: new Date().toISOString(),
+      savedBy: 'admin'
+    };
+
+    await fs.writeFile(MENU_DATA_PATH, JSON.stringify(dataToSave, null, 2));
+    res.json({ success: true, message: 'Menu saved successfully', savedAt: dataToSave.savedAt });
+  } catch (error) {
+    console.error('Error saving menu data:', error);
+    res.status(500).json({ success: false, message: 'Error saving menu data' });
+  }
+});
+
+// Delete menu data (protected - admin only)
+app.delete('/api/menu', verifyAdminToken, async (req, res) => {
+  try {
+    await fs.unlink(MENU_DATA_PATH);
+    res.json({ success: true, message: 'Menu data cleared' });
+  } catch (error) {
+    if (error.code === 'ENOENT') {
+      res.json({ success: true, message: 'No menu data to clear' });
+    } else {
+      console.error('Error deleting menu data:', error);
+      res.status(500).json({ success: false, message: 'Error clearing menu data' });
+    }
+  }
 });
 
 // Start server

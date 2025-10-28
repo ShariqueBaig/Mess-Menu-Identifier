@@ -1,6 +1,4 @@
 // Menu parsing and display logic
-export const STORAGE_KEY = "messMenuData";
-
 export let menuData = null;
 export let pdfDataUrl = null;
 
