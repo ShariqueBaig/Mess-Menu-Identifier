@@ -18,7 +18,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-this-in-pro
 
 // Note: Vercel's filesystem is read-only in production
 // For production, you'll need to use Vercel KV or a database
-const MENU_DATA_PATH = '/tmp/menu-data.json';
+const START_DATE_PATH = '/tmp/start-date.json';
 
 // Middleware to verify admin token
 function verifyAdminToken(req, res, next) {
@@ -77,57 +77,56 @@ app.post('/api/admin/verify', async (req, res) => {
 
 // Get menu data (public)
 app.get('/api/menu', async (req, res) => {
+  // Menu is now read from PDF in the repo, not from storage
+  res.json({ success: false, message: 'Menu data is now read directly from PDF file' });
+});
+
+// Save menu data (protected) - DEPRECATED
+app.post('/api/menu', verifyAdminToken, async (req, res) => {
+  res.json({ success: false, message: 'Menu upload is deprecated. PDF is now in repository.' });
+});
+
+// Delete menu data (protected) - DEPRECATED
+app.delete('/api/menu', verifyAdminToken, async (req, res) => {
+  res.json({ success: false, message: 'Menu deletion is deprecated. Update PDF in repository instead.' });
+});
+
+// Get start date (public)
+app.get('/api/startdate', async (req, res) => {
   try {
-    const data = await fs.readFile(MENU_DATA_PATH, 'utf8');
-    const menuData = JSON.parse(data);
-    res.json({ success: true, data: menuData });
+    const data = await fs.readFile(START_DATE_PATH, 'utf8');
+    const startDateData = JSON.parse(data);
+    res.json({ success: true, startDate: startDateData.startDate });
   } catch (error) {
     if (error.code === 'ENOENT') {
-      res.json({ success: false, message: 'No menu data available yet' });
+      res.json({ success: false, message: 'Start date not set yet' });
     } else {
-      console.error('Error reading menu data:', error);
-      res.status(500).json({ success: false, message: 'Error reading menu data' });
+      console.error('Error reading start date:', error);
+      res.status(500).json({ success: false, message: 'Error reading start date' });
     }
   }
 });
 
-// Save menu data (protected)
-app.post('/api/menu', verifyAdminToken, async (req, res) => {
+// Save start date (protected)
+app.post('/api/startdate', verifyAdminToken, async (req, res) => {
   try {
-    const { menuData, startDate, pdfDataUrl } = req.body;
+    const { startDate } = req.body;
     
-    if (!menuData || !startDate) {
-      return res.status(400).json({ success: false, message: 'Menu data and start date required' });
+    if (!startDate) {
+      return res.status(400).json({ success: false, message: 'Start date required' });
     }
 
     const dataToSave = {
-      menuData,
       startDate,
-      pdfDataUrl: pdfDataUrl || null,
       savedAt: new Date().toISOString(),
       savedBy: 'admin'
     };
 
-    await fs.writeFile(MENU_DATA_PATH, JSON.stringify(dataToSave, null, 2));
-    res.json({ success: true, message: 'Menu saved successfully', savedAt: dataToSave.savedAt });
+    await fs.writeFile(START_DATE_PATH, JSON.stringify(dataToSave, null, 2));
+    res.json({ success: true, message: 'Start date saved successfully', savedAt: dataToSave.savedAt });
   } catch (error) {
-    console.error('Error saving menu data:', error);
-    res.status(500).json({ success: false, message: 'Error saving menu data' });
-  }
-});
-
-// Delete menu data (protected)
-app.delete('/api/menu', verifyAdminToken, async (req, res) => {
-  try {
-    await fs.unlink(MENU_DATA_PATH);
-    res.json({ success: true, message: 'Menu data cleared' });
-  } catch (error) {
-    if (error.code === 'ENOENT') {
-      res.json({ success: true, message: 'No menu data to clear' });
-    } else {
-      console.error('Error deleting menu data:', error);
-      res.status(500).json({ success: false, message: 'Error clearing menu data' });
-    }
+    console.error('Error saving start date:', error);
+    res.status(500).json({ success: false, message: 'Error saving start date' });
   }
 });
 

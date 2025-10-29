@@ -351,39 +351,6 @@ body {
       </div>
 
       <div class="content">
-        <div
-          class="upload-section"
-          id="uploadSection"
-          style="display: none"
-          onclick="document.getElementById('pdfInput').click()"
-        >
-          <h2>📄 Upload Your Mess Menu PDF</h2>
-          <p style="margin: 15px 0; color: #666">
-            Click here or drag your PDF file
-          </p>
-          <button class="upload-btn">Choose PDF File</button>
-          <input type="file" id="pdfInput" accept=".pdf" />
-          <div id="savedStatus"></div>
-          <button
-            class="clear-btn"
-            onclick="event.stopPropagation(); clearSavedData()"
-          >
-            Clear Saved Data
-          </button>
-
-          
-        </div>
-
-        <div class="date-input-section" id="startDateSection" style="display:none;">
-          <label for="startDate"
-            >📅 When does Week 1 start? (Menu Start Date)</label
-          >
-          <input type="date" id="startDate" value="2025-10-01" />
-          <p style="margin-top: 10px; color: #666; font-size: 0.9em">
-            This is usually the first day of the month shown in your PDF
-          </p>
-        </div>
-
         <div id="message"></div>
 
         <div class="menu-display" id="menuDisplay">
@@ -419,8 +386,6 @@ body {
       <p>Made by Sharique</p>
     </footer>
 
-    <button id="adminBtn" class="admin-btn">🔒 Admin</button>
-
     <!-- PDF.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
@@ -430,17 +395,58 @@ body {
 pdfjsLib.GlobalWorkerOptions.workerSrc =
   "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
 
-// API Base URL
-const API_BASE = window.location.origin.includes('localhost') 
-  ? 'http://localhost:3000/api' 
-  : '/api';
-
 // Menu data and state
 let menuData = null;
 let pdfDataUrl = null;
 let manualView = false;
 let viewedOffsetDays = 0;
 let currentViewOffsetDays = 0;
+
+// PDF file path in repository
+const PDF_PATH = '/menu.pdf';
+
+// HARDCODED START DATE - Change this when uploading new menu
+const MENU_START_DATE = '2025-10-06'; // Format: YYYY-MM-DD
+
+// ========== AUTO-LOAD PDF ON STARTUP ==========
+
+async function loadPdfFromRepo() {
+  try {
+    document.getElementById("message").innerHTML = '<div class="success">⏳ Loading menu...</div>';
+    
+    const response = await fetch(PDF_PATH);
+    if (!response.ok) {
+      throw new Error('Menu PDF not found');
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = "";
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item) => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+
+    const parsedData = parseMenu(fullText);
+    menuData = parsedData;
+    
+    document.getElementById("message").innerHTML = '<div class="success">✅ Menu loaded successfully!</div>';
+    displayMenu();
+    
+    // Hide message after 3 seconds
+    setTimeout(() => {
+      document.getElementById("message").innerHTML = '';
+    }, 3000);
+    
+  } catch (error) {
+    console.error('Error loading PDF:', error);
+    document.getElementById("message").innerHTML = 
+      '<div class="error">❌ Error loading menu: ' + error.message + '</div>';
+  }
+}
 
 // ========== MENU FUNCTIONS ==========
 
@@ -556,7 +562,7 @@ function displayMenu() {
     return;
   }
 
-  const startDate = new Date(document.getElementById("startDate").value);
+  const startDate = new Date(MENU_START_DATE);
   const targetDate = new Date();
   if (manualView) {
     targetDate.setDate(targetDate.getDate() + viewedOffsetDays);
@@ -633,268 +639,6 @@ function updateNavButtons(diffDays, totalDays) {
   if (next) next.disabled = diffDays >= totalDays - 1;
 }
 
-// ========== ADMIN FUNCTIONS ==========
-
-async function promptAdmin() {
-  const entered = prompt("Enter admin password to manage menu:");
-  if (entered === null) return;
-  
-  try {
-    const response = await fetch(`${API_BASE}/admin/verify`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ password: entered })
-    });
-
-    const data = await response.json();
-
-    if (response.ok && data.success) {
-      sessionStorage.setItem('adminToken', data.token);
-      unlockAdmin();
-    } else {
-      alert(data.message || "Incorrect password");
-    }
-  } catch (error) {
-    console.error('Auth error:', error);
-    alert("Authentication failed. Please check if the server is running.");
-  }
-}
-
-function unlockAdmin() {
-  const uploadSection = document.getElementById("uploadSection");
-  if (uploadSection) uploadSection.style.display = "block";
-  const startSection = document.getElementById("startDateSection");
-  if (startSection) startSection.style.display = "block";
-  const startInput = document.getElementById("startDate");
-  if (startInput) startInput.disabled = false;
-  alert("Admin unlocked. You can now upload a new PDF and set the start date.");
-}
-
-// ========== STORAGE FUNCTIONS ==========
-
-async function saveMenuData(menuDataParam, startDate, pdfDataUrlParam) {
-  try {
-    const token = sessionStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('Admin authentication required');
-    }
-
-    const response = await fetch(`${API_BASE}/menu`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        menuData: menuDataParam,
-        startDate,
-        pdfDataUrl: pdfDataUrlParam || null
-      })
-    });
-
-    const result = await response.json();
-    
-    if (response.ok && result.success) {
-      updateSavedStatus(true, new Date(result.savedAt));
-      if (pdfDataUrlParam) addViewPdfButton(pdfDataUrlParam);
-      return true;
-    } else {
-      throw new Error(result.message || 'Failed to save menu');
-    }
-  } catch (error) {
-    console.error("Error saving data:", error);
-    document.getElementById("message").innerHTML = `<div class="error">❌ Error saving menu: ${error.message}</div>`;
-    return false;
-  }
-}
-
-async function saveStartDate(startDate) {
-  try {
-    const token = sessionStorage.getItem('adminToken');
-    if (!token) {
-      throw new Error('Admin authentication required');
-    }
-
-    const existingData = await loadSavedData(false);
-    if (!existingData) {
-      document.getElementById("startDate").value = startDate;
-      return;
-    }
-
-    const response = await fetch(`${API_BASE}/menu`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      },
-      body: JSON.stringify({
-        menuData: existingData.menuData,
-        startDate: startDate,
-        pdfDataUrl: existingData.pdfDataUrl
-      })
-    });
-
-    const result = await response.json();
-    if (response.ok && result.success) {
-      updateSavedStatus(true, new Date(result.savedAt));
-    }
-  } catch (error) {
-    console.error("Error saving start date:", error);
-  }
-}
-
-async function loadSavedData(updateUI = true) {
-  try {
-    const response = await fetch(`${API_BASE}/menu`);
-    const result = await response.json();
-
-    if (!response.ok || !result.success || !result.data) {
-      if (updateUI) {
-        document.getElementById("message").innerHTML = '<div class="error">⚠️ Menu not set. Please ask an admin to upload the PDF.</div>';
-      }
-      return null;
-    }
-
-    const savedData = result.data;
-    
-    if (updateUI) {
-      if (savedData.menuData) menuData = savedData.menuData;
-      if (savedData.startDate) {
-        document.getElementById("startDate").value = savedData.startDate;
-      }
-      if (savedData.pdfDataUrl) {
-        pdfDataUrl = savedData.pdfDataUrl;
-        addViewPdfButton(savedData.pdfDataUrl);
-      }
-      if (savedData.savedAt) {
-        updateSavedStatus(true, new Date(savedData.savedAt));
-      }
-      displayMenu();
-    }
-    
-    return savedData;
-  } catch (error) {
-    console.error("Error loading menu data:", error);
-    if (updateUI) {
-      document.getElementById("message").innerHTML = '<div class="error">❌ Error loading menu. Please check your connection.</div>';
-    }
-    return null;
-  }
-}
-
-function updateSavedStatus(saved, date) {
-  const statusDiv = document.getElementById("savedStatus");
-  if (saved && date) {
-    const dateStr = date.toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-    statusDiv.innerHTML = `<div class="saved-info" style="margin-top: 15px;">✅ Menu saved! Last updated: ${dateStr}</div>`;
-  } else if (saved) {
-    statusDiv.innerHTML = `<div class="saved-info" style="margin-top: 15px;">✅ Menu saved successfully!</div>`;
-  } else {
-    statusDiv.innerHTML = "";
-  }
-}
-
-function addViewPdfButton(dataUrl) {
-  const statusDiv = document.getElementById("savedStatus");
-  const existing = document.getElementById("viewPdfBtn");
-  if (existing) return;
-  const btn = document.createElement("div");
-  btn.style.marginTop = "12px";
-  btn.innerHTML = `<a id="viewPdfBtn" href="${dataUrl}" target="_blank" style="display:inline-block;padding:8px 12px;background:#667eea;color:#fff;border-radius:8px;text-decoration:none;">📄 View original PDF</a> <a href="${dataUrl}" download="mess_menu.pdf" style="display:inline-block;margin-left:8px;padding:8px 12px;background:#764ba2;color:#fff;border-radius:8px;text-decoration:none;">⬇️ Download</a>`;
-  statusDiv.appendChild(btn);
-}
-
-function removeViewPdfButton() {
-  const btn = document.getElementById("viewPdfBtn");
-  if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
-}
-
-async function clearSavedData() {
-  if (confirm("Are you sure you want to clear the saved menu data?")) {
-    try {
-      const token = sessionStorage.getItem('adminToken');
-      if (!token) {
-        alert('Admin authentication required');
-        return;
-      }
-
-      const response = await fetch(`${API_BASE}/menu`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      const result = await response.json();
-      
-      if (response.ok && result.success) {
-        menuData = null;
-        pdfDataUrl = null;
-        removeViewPdfButton();
-        document.getElementById("menuDisplay").style.display = "none";
-        document.getElementById("message").innerHTML = '<div class="success">✅ Saved data cleared!</div>';
-        updateSavedStatus(false);
-      } else {
-        throw new Error(result.message || 'Failed to clear data');
-      }
-    } catch (error) {
-      console.error("Error clearing data:", error);
-      document.getElementById("message").innerHTML = `<div class="error">❌ Error clearing data: ${error.message}</div>`;
-    }
-  }
-}
-
-// ========== FILE UPLOAD ==========
-
-async function handleFileSelect(e) {
-  const file = e.target.files[0];
-  if (!file) return;
-
-  document.getElementById("message").innerHTML = '<div class="success">⏳ Reading PDF...</div>';
-
-  try {
-    const arrayBuffer = await file.arrayBuffer();
-    const dataUrl = await fileToDataURL(file);
-
-    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-    let fullText = "";
-
-    for (let i = 1; i <= pdf.numPages; i++) {
-      const page = await pdf.getPage(i);
-      const textContent = await page.getTextContent();
-      const pageText = textContent.items.map((item) => item.str).join(" ");
-      fullText += pageText + "\n";
-    }
-
-    const parsedData = parseMenu(fullText);
-    menuData = parsedData;
-    pdfDataUrl = dataUrl;
-    
-    const startDate = document.getElementById("startDate").value;
-    const saved = await saveMenuData(parsedData, startDate, dataUrl);
-    
-    if (saved) {
-      document.getElementById("message").innerHTML = '<div class="success">✅ PDF loaded and saved successfully!</div>';
-      addViewPdfButton(dataUrl);
-      displayMenu();
-    }
-  } catch (error) {
-    document.getElementById("message").innerHTML = '<div class="error">❌ Error reading PDF: ' + error.message + "</div>";
-  }
-}
-
-function fileToDataURL(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(reader.result);
-    reader.onerror = (err) => reject(err);
-    reader.readAsDataURL(file);
-  });
-}
-
 // ========== INITIALIZATION ==========
 
 function updateTime() {
@@ -918,14 +662,6 @@ setInterval(() => {
 }, 60000);
 
 window.addEventListener("DOMContentLoaded", () => {
-  document.getElementById("adminBtn").addEventListener("click", promptAdmin);
-  document.getElementById("pdfInput").addEventListener("change", handleFileSelect);
-  document.getElementById("startDate").addEventListener("change", () => {
-    const startDate = document.getElementById("startDate").value;
-    saveStartDate(startDate);
-    displayMenu();
-  });
-
   const prev = document.getElementById("prevDayBtn");
   const next = document.getElementById("nextDayBtn");
   const today = document.getElementById("todayBtn");
@@ -937,11 +673,9 @@ window.addEventListener("DOMContentLoaded", () => {
     displayMenu();
   });
 
-  loadSavedData();
+  // Auto-load PDF and menu on startup
+  loadPdfFromRepo();
 });
-
-// Expose for onclick handler
-window.clearSavedData = clearSavedData;
     </script>
   </body>
 </html>
