@@ -1,0 +1,681 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mess Menu Tracker</title>
+    <style>
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  min-height: 100vh;
+  padding: 20px;
+}
+
+.container {
+  max-width: 800px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+  position: relative;
+}
+
+.header {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 30px;
+  position: relative;
+  text-align: center;
+}
+
+.header h1 {
+  font-size: 2em;
+  margin-bottom: 10px;
+}
+
+.admin-btn {
+  position: absolute;
+  right: 30px;
+  top: 28px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  color: white;
+  padding: 8px 14px;
+  border-radius: 12px;
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.header p {
+  opacity: 0.9;
+  font-size: 1.1em;
+}
+
+.content {
+  padding: 30px;
+}
+
+.upload-section {
+  text-align: center;
+  padding: 40px 20px;
+  border: 3px dashed #667eea;
+  border-radius: 15px;
+  background: #f8f9ff;
+  margin-bottom: 30px;
+  cursor: pointer;
+  transition: all 0.3s;
+  position: relative;
+}
+
+.upload-section:hover {
+  background: #f0f2ff;
+  border-color: #764ba2;
+}
+
+.upload-section input {
+  display: none;
+}
+
+.upload-btn {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 15px 40px;
+  border: none;
+  border-radius: 30px;
+  font-size: 1.1em;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.upload-btn:hover {
+  transform: scale(1.05);
+}
+
+.clear-btn {
+  background: #e74c3c;
+  color: white;
+  padding: 10px 25px;
+  border: none;
+  border-radius: 20px;
+  font-size: 0.9em;
+  cursor: pointer;
+  margin-top: 15px;
+  transition: transform 0.2s;
+}
+
+.clear-btn:hover {
+  transform: scale(1.05);
+}
+
+.date-input-section {
+  margin: 20px 0;
+  padding: 20px;
+  background: #f8f9ff;
+  border-radius: 10px;
+}
+
+.date-input-section label {
+  display: block;
+  margin-bottom: 10px;
+  font-weight: bold;
+  color: #667eea;
+}
+
+.date-input-section input {
+  width: 100%;
+  padding: 12px;
+  border: 2px solid #667eea;
+  border-radius: 8px;
+  font-size: 1em;
+}
+
+.menu-display {
+  display: none;
+}
+
+.nav-day-btn {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+  background: linear-gradient(135deg, #6b7df0 0%, #5b63d6 100%);
+  color: #fff;
+  font-size: 1.25em;
+  cursor: pointer;
+  box-shadow: 0 12px 30px rgba(55, 63, 172, 0.28);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
+  z-index: 1200;
+}
+
+.nav-day-btn:hover:not(:disabled) {
+  transform: scale(1.06);
+  box-shadow: 0 18px 40px rgba(55, 63, 172, 0.36);
+}
+
+.nav-day-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+#prevDayBtn {
+  left: 16px;
+  top: 45%;
+}
+#nextDayBtn {
+  right: 16px;
+  top: 45%;
+}
+
+#todayBtn {
+  position: absolute;
+  right: 18px;
+  bottom: 18px;
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: none;
+  background: linear-gradient(90deg, #4f7cf6, #2f5bd6);
+  color: #fff;
+  cursor: pointer;
+  box-shadow: 0 10px 30px rgba(47, 91, 214, 0.18);
+  font-weight: 600;
+  z-index: 40;
+  transition: transform 0.12s ease, box-shadow 0.12s ease;
+}
+
+#todayBtn:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 16px 40px rgba(47, 91, 214, 0.22);
+}
+
+@media (max-width: 640px) {
+  .nav-day-btn {
+    width: 46px;
+    height: 46px;
+    font-size: 1.05em;
+  }
+  #prevDayBtn {
+    left: 8px;
+    top: 45%;
+  }
+  #nextDayBtn {
+    right: 8px;
+    top: 45%;
+  }
+  #todayBtn {
+    right: 12px;
+    bottom: 18px;
+  }
+}
+
+.current-info {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 25px;
+  border-radius: 15px;
+  margin-bottom: 25px;
+}
+
+.current-info h2 {
+  font-size: 1.5em;
+  margin-bottom: 15px;
+}
+
+.info-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+}
+
+.info-item {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 15px;
+  border-radius: 10px;
+  text-align: center;
+}
+
+.info-item strong {
+  display: block;
+  font-size: 0.9em;
+  opacity: 0.9;
+  margin-bottom: 5px;
+}
+
+.info-item span {
+  font-size: 1.3em;
+  font-weight: bold;
+}
+
+.meal-card {
+  background: #f8f9ff;
+  padding: 25px;
+  border-radius: 15px;
+  margin-bottom: 20px;
+  border-left: 5px solid #667eea;
+}
+
+.meal-card.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-left: 5px solid #fff;
+  box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+}
+
+.meal-card h3 {
+  font-size: 1.5em;
+  margin-bottom: 15px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.meal-card.active h3::before {
+  content: "🍽️";
+  font-size: 1.2em;
+}
+
+.meal-items {
+  font-size: 1.1em;
+  line-height: 1.8;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 5px 15px;
+  border-radius: 20px;
+  font-size: 0.8em;
+  font-weight: bold;
+  margin-left: 10px;
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.error {
+  background: #fee;
+  color: #c33;
+  padding: 15px;
+  border-radius: 10px;
+  margin: 20px 0;
+  border-left: 4px solid #c33;
+}
+
+.success {
+  background: #efe;
+  color: #3c3;
+  padding: 15px;
+  border-radius: 10px;
+  margin: 20px 0;
+  border-left: 4px solid #3c3;
+}
+
+.saved-info {
+  background: #e8f5e9;
+  color: #2e7d32;
+  padding: 15px;
+  border-radius: 10px;
+  margin: 20px 0;
+  border-left: 4px solid #2e7d32;
+}
+
+.footer {
+  text-align: center;
+  padding: 20px;
+  margin-top: 30px;
+  color: white;
+  font-size: 0.95em;
+  opacity: 0.9;
+}
+
+.footer p {
+  margin: 0;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+}
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <h1>🍽️ Mess Menu Tracker</h1>
+        <p id="currentTime"></p>
+      </div>
+
+      <div class="content">
+        <div id="message"></div>
+
+        <div class="menu-display" id="menuDisplay">
+          <div class="current-info">
+            <h2>📍 Current Status <span id="viewingDate" style="font-size:0.9rem;font-weight:400;display:block;margin-top:8px;opacity:0.95"></span></h2>
+            <div class="info-grid">
+              <div class="info-item">
+                <strong>Week</strong>
+                <span id="weekNum">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Day</strong>
+                <span id="dayName">-</span>
+              </div>
+              <div class="info-item">
+                <strong>Current Meal</strong>
+                <span id="mealTime">-</span>
+              </div>
+            </div>
+          </div>
+
+      <div id="mealsContainer"></div>
+        </div>
+
+    <!-- nav buttons placed at container sides -->
+    <button id="prevDayBtn" class="nav-day-btn" title="Previous day">◀</button>
+    <button id="nextDayBtn" class="nav-day-btn" title="Next day">▶</button>
+    <button id="todayBtn" title="Go to Today">Today</button>
+      </div>
+    </div>
+
+    <footer class="footer">
+      <p>Made by Sharique</p>
+    </footer>
+
+    <!-- PDF.js library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    
+    <!-- Application JavaScript (inlined) -->
+    <script>
+// Initialize PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// Menu data and state
+let menuData = null;
+let pdfDataUrl = null;
+let manualView = false;
+let viewedOffsetDays = 0;
+let currentViewOffsetDays = 0;
+
+// PDF file path in repository
+const PDF_PATH = '/menu.pdf';
+
+// HARDCODED START DATE - Change this when uploading new menu
+const MENU_START_DATE = '2025-10-06'; // Format: YYYY-MM-DD
+
+// ========== AUTO-LOAD PDF ON STARTUP ==========
+
+async function loadPdfFromRepo() {
+  try {
+    document.getElementById("message").innerHTML = '<div class="success">⏳ Loading menu...</div>';
+    
+    const response = await fetch(PDF_PATH);
+    if (!response.ok) {
+      throw new Error(`Menu PDF not found (Status: ${response.status}). Path: ${PDF_PATH}`);
+    }
+    
+    const arrayBuffer = await response.arrayBuffer();
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = "";
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item) => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+
+    const parsedData = parseMenu(fullText);
+    menuData = parsedData;
+    
+    document.getElementById("message").innerHTML = '<div class="success">✅ Menu loaded successfully!</div>';
+    displayMenu();
+    
+    // Hide message after 3 seconds
+    setTimeout(() => {
+      document.getElementById("message").innerHTML = '';
+    }, 3000);
+    
+  } catch (error) {
+    console.error('Error loading PDF:', error);
+    document.getElementById("message").innerHTML = 
+      '<div class="error">❌ Error loading menu: ' + error.message + '</div>';
+  }
+}
+
+// ========== MENU FUNCTIONS ==========
+
+function parseMenu(text) {
+  menuData = { weeks: [] };
+  text = text.replace(/\s+/g, " ");
+  const weekPattern = /Week (\d+)(.*?)(?=Week \d+|$)/gs;
+  const weekMatches = [...text.matchAll(weekPattern)];
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  for (let w = 0; w < weekMatches.length && w < 4; w++) {
+    const weekText = weekMatches[w][2];
+    const weekData = { days: [] };
+
+    for (let d = 0; d < days.length; d++) {
+      const day = days[d];
+      const nextDay = days[d + 1];
+      let pattern;
+
+      if (nextDay) {
+        pattern = new RegExp(day + "\\s+Breakfast\\*?\\s+(.*?)\\s+" + nextDay, "s");
+      } else {
+        pattern = new RegExp(day + "\\s+Breakfast\\*?\\s+(.*?)(?=Breakfast\\*\\s*:|Week|$)", "s");
+      }
+
+      const match = weekText.match(pattern);
+
+      if (match) {
+        let content = match[1].trim();
+        content = content.replace(/\s+/g, " ").trim();
+
+        let lunch = "Not available";
+        let dinner = "Not available";
+
+        const dinnerKeywords = ["Biryani", "Nihari", "Haleem", "Karahi", "Korma", "Handi", "Qeema", "Pulao", "Palak", "Murgh Channa", "Special", "Nuggets", "Macaroni", "Pasta", "Gosht"];
+        let splitIndex = -1;
+
+        for (const keyword of dinnerKeywords) {
+          const regex = new RegExp("\\b" + keyword + "\\b", "i");
+          const keywordMatch = content.match(regex);
+          if (keywordMatch) {
+            const idx = content.lastIndexOf(keywordMatch[0]);
+            if (idx > splitIndex) {
+              splitIndex = idx;
+            }
+          }
+        }
+
+        if (splitIndex > 0) {
+          let wordStart = splitIndex;
+          while (wordStart > 0 && content[wordStart - 1] !== " ") {
+            wordStart--;
+          }
+          lunch = content.substring(0, wordStart).trim();
+          dinner = content.substring(wordStart).trim();
+        } else {
+          const words = content.split(" ");
+          const mid = Math.floor(words.length / 2);
+          lunch = words.slice(0, mid).join(" ");
+          dinner = words.slice(mid).join(" ");
+        }
+
+        lunch = lunch || "Not available";
+        dinner = dinner || "Not available";
+
+        const dayData = {
+          name: day,
+          breakfast: day === "Sunday" ? "Special Breakfast (Halwa + Puri/Kulchay + Channa + Banana Shake/Lassi)" : "Standard Breakfast (Half fry, Full fry, Omlete, Khakina, Bread, Yoghurt, Blueband, Tea, Paratha, Chipati)",
+          lunch: lunch,
+          dinner: dinner,
+        };
+
+        weekData.days.push(dayData);
+      }
+    }
+
+    if (weekData.days.length > 0) {
+      menuData.weeks.push(weekData);
+    }
+  }
+  
+  return menuData;
+}
+
+function getCurrentMealTime() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const totalMinutes = hour * 60 + minute;
+  const day = now.getDay();
+
+  if (day === 0) {
+    if (totalMinutes >= 600 && totalMinutes < 675) return "breakfast";
+  } else {
+    if (totalMinutes >= 420 && totalMinutes < 570) return "breakfast";
+  }
+
+  if (totalMinutes >= 780 && totalMinutes < 900) return "lunch";
+  if (totalMinutes >= 1200 && totalMinutes < 1320) return "dinner";
+
+  return "none";
+}
+
+function showOffset(offset) {
+  manualView = true;
+  viewedOffsetDays = offset;
+  currentViewOffsetDays = offset;
+  displayMenu();
+}
+
+function displayMenu() {
+  if (!menuData || !menuData.weeks || menuData.weeks.length === 0) {
+    return;
+  }
+
+  const startDate = new Date(MENU_START_DATE);
+  const targetDate = new Date();
+  if (manualView) {
+    targetDate.setDate(targetDate.getDate() + viewedOffsetDays);
+  }
+
+  const diffTime = targetDate - startDate;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const totalDays = menuData.weeks.length * 7;
+
+  if (diffDays < 0 || diffDays >= totalDays) {
+    document.getElementById("message").innerHTML = '<div class="error">❌ Date is outside menu range</div>';
+    updateNavButtons(diffDays, totalDays);
+    return;
+  }
+
+  const weekIndex = Math.floor(diffDays / 7);
+  const dayIndex = diffDays % 7;
+  const week = menuData.weeks[weekIndex];
+
+  if (!week || !week.days[dayIndex]) {
+    document.getElementById("message").innerHTML = '<div class="error">❌ No menu data for this date</div>';
+    updateNavButtons(diffDays, totalDays);
+    return;
+  }
+
+  const today = week.days[dayIndex];
+  const currentMeal = getCurrentMealTime();
+  const isWeekend = targetDate.getDay() === 0;
+
+  document.getElementById("weekNum").textContent = `Week ${weekIndex + 1}`;
+  document.getElementById("dayName").textContent = today.name;
+  document.getElementById("mealTime").textContent = currentMeal === "none" ? "No meal time" : currentMeal.charAt(0).toUpperCase() + currentMeal.slice(1);
+
+  const viewing = document.getElementById("viewingDate");
+  if (viewing) {
+    const opts = { weekday: "long", year: "numeric", month: "short", day: "numeric" };
+    viewing.textContent = targetDate.toLocaleDateString("en-US", opts) + (manualView ? " (viewing)" : "");
+  }
+
+  const mealsContainer = document.getElementById("mealsContainer");
+  mealsContainer.innerHTML = "";
+
+  const breakfastTime = isWeekend ? "10:00 AM - 11:15 AM" : "7:00 AM - 9:30 AM";
+  const meals = [
+    { name: "Breakfast", time: breakfastTime, key: "breakfast" },
+    { name: "Lunch", time: "1:00 PM - 3:00 PM", key: "lunch" },
+    { name: "Dinner", time: "8:00 PM - 10:00 PM", key: "dinner" },
+  ];
+
+  meals.forEach((meal) => {
+    const isActive = currentMeal === meal.key && !manualView;
+    const card = document.createElement("div");
+    card.className = "meal-card" + (isActive ? " active" : "");
+    card.innerHTML = `
+      <h3>
+        ${meal.name}
+        ${isActive ? '<span class="status-badge">NOW SERVING</span>' : ""}
+      </h3>
+      <p style="opacity: 0.8; margin-bottom: 15px;">${meal.time}</p>
+      <div class="meal-items">${today[meal.key]}</div>
+    `;
+    mealsContainer.appendChild(card);
+  });
+
+  document.getElementById("menuDisplay").style.display = "block";
+  updateNavButtons(diffDays, totalDays);
+  currentViewOffsetDays = manualView ? viewedOffsetDays : 0;
+}
+
+function updateNavButtons(diffDays, totalDays) {
+  const prev = document.getElementById("prevDayBtn");
+  const next = document.getElementById("nextDayBtn");
+  if (prev) prev.disabled = diffDays <= 0;
+  if (next) next.disabled = diffDays >= totalDays - 1;
+}
+
+// ========== INITIALIZATION ==========
+
+function updateTime() {
+  const now = new Date();
+  const options = {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  };
+  document.getElementById("currentTime").textContent = now.toLocaleDateString("en-US", options);
+}
+
+updateTime();
+setInterval(updateTime, 1000);
+setInterval(() => {
+  if (!manualView) displayMenu();
+}, 60000);
+
+window.addEventListener("DOMContentLoaded", () => {
+  const prev = document.getElementById("prevDayBtn");
+  const next = document.getElementById("nextDayBtn");
+  const today = document.getElementById("todayBtn");
+  
+  if (prev) prev.addEventListener("click", () => showOffset(currentViewOffsetDays - 1));
+  if (next) next.addEventListener("click", () => showOffset(currentViewOffsetDays + 1));
+  if (today) today.addEventListener("click", () => {
+    manualView = false;
+    displayMenu();
+  });
+
+  // Auto-load PDF and menu on startup
+  loadPdfFromRepo();
+});
+    </script>
+  </body>
+</html>
