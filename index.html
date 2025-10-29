@@ -424,7 +424,524 @@ body {
     <!-- PDF.js library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
     
-    <!-- Application modules -->
-    <script type="module" src="/js/app.js"></script>
+    <!-- Application JavaScript (inlined) -->
+    <script>
+// Initialize PDF.js
+pdfjsLib.GlobalWorkerOptions.workerSrc =
+  "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+// API Base URL
+const API_BASE = window.location.origin.includes('localhost') 
+  ? 'http://localhost:3000/api' 
+  : '/api';
+
+// Menu data and state
+let menuData = null;
+let pdfDataUrl = null;
+let manualView = false;
+let viewedOffsetDays = 0;
+let currentViewOffsetDays = 0;
+
+// ========== MENU FUNCTIONS ==========
+
+function parseMenu(text) {
+  menuData = { weeks: [] };
+  text = text.replace(/\s+/g, " ");
+  const weekPattern = /Week (\d+)(.*?)(?=Week \d+|$)/gs;
+  const weekMatches = [...text.matchAll(weekPattern)];
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+
+  for (let w = 0; w < weekMatches.length && w < 4; w++) {
+    const weekText = weekMatches[w][2];
+    const weekData = { days: [] };
+
+    for (let d = 0; d < days.length; d++) {
+      const day = days[d];
+      const nextDay = days[d + 1];
+      let pattern;
+
+      if (nextDay) {
+        pattern = new RegExp(day + "\\s+Breakfast\\*?\\s+(.*?)\\s+" + nextDay, "s");
+      } else {
+        pattern = new RegExp(day + "\\s+Breakfast\\*?\\s+(.*?)(?=Breakfast\\*\\s*:|Week|$)", "s");
+      }
+
+      const match = weekText.match(pattern);
+
+      if (match) {
+        let content = match[1].trim();
+        content = content.replace(/\s+/g, " ").trim();
+
+        let lunch = "Not available";
+        let dinner = "Not available";
+
+        const dinnerKeywords = ["Biryani", "Nihari", "Haleem", "Karahi", "Korma", "Handi", "Qeema", "Pulao", "Palak", "Murgh Channa", "Special", "Nuggets", "Macaroni", "Pasta", "Gosht"];
+        let splitIndex = -1;
+
+        for (const keyword of dinnerKeywords) {
+          const regex = new RegExp("\\b" + keyword + "\\b", "i");
+          const keywordMatch = content.match(regex);
+          if (keywordMatch) {
+            const idx = content.lastIndexOf(keywordMatch[0]);
+            if (idx > splitIndex) {
+              splitIndex = idx;
+            }
+          }
+        }
+
+        if (splitIndex > 0) {
+          let wordStart = splitIndex;
+          while (wordStart > 0 && content[wordStart - 1] !== " ") {
+            wordStart--;
+          }
+          lunch = content.substring(0, wordStart).trim();
+          dinner = content.substring(wordStart).trim();
+        } else {
+          const words = content.split(" ");
+          const mid = Math.floor(words.length / 2);
+          lunch = words.slice(0, mid).join(" ");
+          dinner = words.slice(mid).join(" ");
+        }
+
+        lunch = lunch || "Not available";
+        dinner = dinner || "Not available";
+
+        const dayData = {
+          name: day,
+          breakfast: day === "Sunday" ? "Special Breakfast (Halwa + Puri/Kulchay + Channa + Banana Shake/Lassi)" : "Standard Breakfast (Half fry, Full fry, Omlete, Khakina, Bread, Yoghurt, Blueband, Tea, Paratha, Chipati)",
+          lunch: lunch,
+          dinner: dinner,
+        };
+
+        weekData.days.push(dayData);
+      }
+    }
+
+    if (weekData.days.length > 0) {
+      menuData.weeks.push(weekData);
+    }
+  }
+  
+  return menuData;
+}
+
+function getCurrentMealTime() {
+  const now = new Date();
+  const hour = now.getHours();
+  const minute = now.getMinutes();
+  const totalMinutes = hour * 60 + minute;
+  const day = now.getDay();
+
+  if (day === 0) {
+    if (totalMinutes >= 600 && totalMinutes < 675) return "breakfast";
+  } else {
+    if (totalMinutes >= 420 && totalMinutes < 570) return "breakfast";
+  }
+
+  if (totalMinutes >= 780 && totalMinutes < 900) return "lunch";
+  if (totalMinutes >= 1200 && totalMinutes < 1320) return "dinner";
+
+  return "none";
+}
+
+function showOffset(offset) {
+  manualView = true;
+  viewedOffsetDays = offset;
+  currentViewOffsetDays = offset;
+  displayMenu();
+}
+
+function displayMenu() {
+  if (!menuData || !menuData.weeks || menuData.weeks.length === 0) {
+    return;
+  }
+
+  const startDate = new Date(document.getElementById("startDate").value);
+  const targetDate = new Date();
+  if (manualView) {
+    targetDate.setDate(targetDate.getDate() + viewedOffsetDays);
+  }
+
+  const diffTime = targetDate - startDate;
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  const totalDays = menuData.weeks.length * 7;
+
+  if (diffDays < 0 || diffDays >= totalDays) {
+    document.getElementById("message").innerHTML = '<div class="error">❌ Date is outside menu range</div>';
+    updateNavButtons(diffDays, totalDays);
+    return;
+  }
+
+  const weekIndex = Math.floor(diffDays / 7);
+  const dayIndex = diffDays % 7;
+  const week = menuData.weeks[weekIndex];
+
+  if (!week || !week.days[dayIndex]) {
+    document.getElementById("message").innerHTML = '<div class="error">❌ No menu data for this date</div>';
+    updateNavButtons(diffDays, totalDays);
+    return;
+  }
+
+  const today = week.days[dayIndex];
+  const currentMeal = getCurrentMealTime();
+  const isWeekend = targetDate.getDay() === 0;
+
+  document.getElementById("weekNum").textContent = `Week ${weekIndex + 1}`;
+  document.getElementById("dayName").textContent = today.name;
+  document.getElementById("mealTime").textContent = currentMeal === "none" ? "No meal time" : currentMeal.charAt(0).toUpperCase() + currentMeal.slice(1);
+
+  const viewing = document.getElementById("viewingDate");
+  if (viewing) {
+    const opts = { weekday: "long", year: "numeric", month: "short", day: "numeric" };
+    viewing.textContent = targetDate.toLocaleDateString("en-US", opts) + (manualView ? " (viewing)" : "");
+  }
+
+  const mealsContainer = document.getElementById("mealsContainer");
+  mealsContainer.innerHTML = "";
+
+  const breakfastTime = isWeekend ? "10:00 AM - 11:15 AM" : "7:00 AM - 9:30 AM";
+  const meals = [
+    { name: "Breakfast", time: breakfastTime, key: "breakfast" },
+    { name: "Lunch", time: "1:00 PM - 3:00 PM", key: "lunch" },
+    { name: "Dinner", time: "8:00 PM - 10:00 PM", key: "dinner" },
+  ];
+
+  meals.forEach((meal) => {
+    const isActive = currentMeal === meal.key && !manualView;
+    const card = document.createElement("div");
+    card.className = "meal-card" + (isActive ? " active" : "");
+    card.innerHTML = `
+      <h3>
+        ${meal.name}
+        ${isActive ? '<span class="status-badge">NOW SERVING</span>' : ""}
+      </h3>
+      <p style="opacity: 0.8; margin-bottom: 15px;">${meal.time}</p>
+      <div class="meal-items">${today[meal.key]}</div>
+    `;
+    mealsContainer.appendChild(card);
+  });
+
+  document.getElementById("menuDisplay").style.display = "block";
+  updateNavButtons(diffDays, totalDays);
+  currentViewOffsetDays = manualView ? viewedOffsetDays : 0;
+}
+
+function updateNavButtons(diffDays, totalDays) {
+  const prev = document.getElementById("prevDayBtn");
+  const next = document.getElementById("nextDayBtn");
+  if (prev) prev.disabled = diffDays <= 0;
+  if (next) next.disabled = diffDays >= totalDays - 1;
+}
+
+// ========== ADMIN FUNCTIONS ==========
+
+async function promptAdmin() {
+  const entered = prompt("Enter admin password to manage menu:");
+  if (entered === null) return;
+  
+  try {
+    const response = await fetch(`${API_BASE}/admin/verify`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: entered })
+    });
+
+    const data = await response.json();
+
+    if (response.ok && data.success) {
+      sessionStorage.setItem('adminToken', data.token);
+      unlockAdmin();
+    } else {
+      alert(data.message || "Incorrect password");
+    }
+  } catch (error) {
+    console.error('Auth error:', error);
+    alert("Authentication failed. Please check if the server is running.");
+  }
+}
+
+function unlockAdmin() {
+  const uploadSection = document.getElementById("uploadSection");
+  if (uploadSection) uploadSection.style.display = "block";
+  const startSection = document.getElementById("startDateSection");
+  if (startSection) startSection.style.display = "block";
+  const startInput = document.getElementById("startDate");
+  if (startInput) startInput.disabled = false;
+  alert("Admin unlocked. You can now upload a new PDF and set the start date.");
+}
+
+// ========== STORAGE FUNCTIONS ==========
+
+async function saveMenuData(menuDataParam, startDate, pdfDataUrlParam) {
+  try {
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('Admin authentication required');
+    }
+
+    const response = await fetch(`${API_BASE}/menu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        menuData: menuDataParam,
+        startDate,
+        pdfDataUrl: pdfDataUrlParam || null
+      })
+    });
+
+    const result = await response.json();
+    
+    if (response.ok && result.success) {
+      updateSavedStatus(true, new Date(result.savedAt));
+      if (pdfDataUrlParam) addViewPdfButton(pdfDataUrlParam);
+      return true;
+    } else {
+      throw new Error(result.message || 'Failed to save menu');
+    }
+  } catch (error) {
+    console.error("Error saving data:", error);
+    document.getElementById("message").innerHTML = `<div class="error">❌ Error saving menu: ${error.message}</div>`;
+    return false;
+  }
+}
+
+async function saveStartDate(startDate) {
+  try {
+    const token = sessionStorage.getItem('adminToken');
+    if (!token) {
+      throw new Error('Admin authentication required');
+    }
+
+    const existingData = await loadSavedData(false);
+    if (!existingData) {
+      document.getElementById("startDate").value = startDate;
+      return;
+    }
+
+    const response = await fetch(`${API_BASE}/menu`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        menuData: existingData.menuData,
+        startDate: startDate,
+        pdfDataUrl: existingData.pdfDataUrl
+      })
+    });
+
+    const result = await response.json();
+    if (response.ok && result.success) {
+      updateSavedStatus(true, new Date(result.savedAt));
+    }
+  } catch (error) {
+    console.error("Error saving start date:", error);
+  }
+}
+
+async function loadSavedData(updateUI = true) {
+  try {
+    const response = await fetch(`${API_BASE}/menu`);
+    const result = await response.json();
+
+    if (!response.ok || !result.success || !result.data) {
+      if (updateUI) {
+        document.getElementById("message").innerHTML = '<div class="error">⚠️ Menu not set. Please ask an admin to upload the PDF.</div>';
+      }
+      return null;
+    }
+
+    const savedData = result.data;
+    
+    if (updateUI) {
+      if (savedData.menuData) menuData = savedData.menuData;
+      if (savedData.startDate) {
+        document.getElementById("startDate").value = savedData.startDate;
+      }
+      if (savedData.pdfDataUrl) {
+        pdfDataUrl = savedData.pdfDataUrl;
+        addViewPdfButton(savedData.pdfDataUrl);
+      }
+      if (savedData.savedAt) {
+        updateSavedStatus(true, new Date(savedData.savedAt));
+      }
+      displayMenu();
+    }
+    
+    return savedData;
+  } catch (error) {
+    console.error("Error loading menu data:", error);
+    if (updateUI) {
+      document.getElementById("message").innerHTML = '<div class="error">❌ Error loading menu. Please check your connection.</div>';
+    }
+    return null;
+  }
+}
+
+function updateSavedStatus(saved, date) {
+  const statusDiv = document.getElementById("savedStatus");
+  if (saved && date) {
+    const dateStr = date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+    statusDiv.innerHTML = `<div class="saved-info" style="margin-top: 15px;">✅ Menu saved! Last updated: ${dateStr}</div>`;
+  } else if (saved) {
+    statusDiv.innerHTML = `<div class="saved-info" style="margin-top: 15px;">✅ Menu saved successfully!</div>`;
+  } else {
+    statusDiv.innerHTML = "";
+  }
+}
+
+function addViewPdfButton(dataUrl) {
+  const statusDiv = document.getElementById("savedStatus");
+  const existing = document.getElementById("viewPdfBtn");
+  if (existing) return;
+  const btn = document.createElement("div");
+  btn.style.marginTop = "12px";
+  btn.innerHTML = `<a id="viewPdfBtn" href="${dataUrl}" target="_blank" style="display:inline-block;padding:8px 12px;background:#667eea;color:#fff;border-radius:8px;text-decoration:none;">📄 View original PDF</a> <a href="${dataUrl}" download="mess_menu.pdf" style="display:inline-block;margin-left:8px;padding:8px 12px;background:#764ba2;color:#fff;border-radius:8px;text-decoration:none;">⬇️ Download</a>`;
+  statusDiv.appendChild(btn);
+}
+
+function removeViewPdfButton() {
+  const btn = document.getElementById("viewPdfBtn");
+  if (btn && btn.parentNode) btn.parentNode.removeChild(btn);
+}
+
+async function clearSavedData() {
+  if (confirm("Are you sure you want to clear the saved menu data?")) {
+    try {
+      const token = sessionStorage.getItem('adminToken');
+      if (!token) {
+        alert('Admin authentication required');
+        return;
+      }
+
+      const response = await fetch(`${API_BASE}/menu`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      const result = await response.json();
+      
+      if (response.ok && result.success) {
+        menuData = null;
+        pdfDataUrl = null;
+        removeViewPdfButton();
+        document.getElementById("menuDisplay").style.display = "none";
+        document.getElementById("message").innerHTML = '<div class="success">✅ Saved data cleared!</div>';
+        updateSavedStatus(false);
+      } else {
+        throw new Error(result.message || 'Failed to clear data');
+      }
+    } catch (error) {
+      console.error("Error clearing data:", error);
+      document.getElementById("message").innerHTML = `<div class="error">❌ Error clearing data: ${error.message}</div>`;
+    }
+  }
+}
+
+// ========== FILE UPLOAD ==========
+
+async function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+
+  document.getElementById("message").innerHTML = '<div class="success">⏳ Reading PDF...</div>';
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    const dataUrl = await fileToDataURL(file);
+
+    const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+    let fullText = "";
+
+    for (let i = 1; i <= pdf.numPages; i++) {
+      const page = await pdf.getPage(i);
+      const textContent = await page.getTextContent();
+      const pageText = textContent.items.map((item) => item.str).join(" ");
+      fullText += pageText + "\n";
+    }
+
+    const parsedData = parseMenu(fullText);
+    menuData = parsedData;
+    pdfDataUrl = dataUrl;
+    
+    const startDate = document.getElementById("startDate").value;
+    const saved = await saveMenuData(parsedData, startDate, dataUrl);
+    
+    if (saved) {
+      document.getElementById("message").innerHTML = '<div class="success">✅ PDF loaded and saved successfully!</div>';
+      addViewPdfButton(dataUrl);
+      displayMenu();
+    }
+  } catch (error) {
+    document.getElementById("message").innerHTML = '<div class="error">❌ Error reading PDF: ' + error.message + "</div>";
+  }
+}
+
+function fileToDataURL(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = (err) => reject(err);
+    reader.readAsDataURL(file);
+  });
+}
+
+// ========== INITIALIZATION ==========
+
+function updateTime() {
+  const now = new Date();
+  const options = {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  };
+  document.getElementById("currentTime").textContent = now.toLocaleDateString("en-US", options);
+}
+
+updateTime();
+setInterval(updateTime, 1000);
+setInterval(() => {
+  if (!manualView) displayMenu();
+}, 60000);
+
+window.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("adminBtn").addEventListener("click", promptAdmin);
+  document.getElementById("pdfInput").addEventListener("change", handleFileSelect);
+  document.getElementById("startDate").addEventListener("change", () => {
+    const startDate = document.getElementById("startDate").value;
+    saveStartDate(startDate);
+    displayMenu();
+  });
+
+  const prev = document.getElementById("prevDayBtn");
+  const next = document.getElementById("nextDayBtn");
+  const today = document.getElementById("todayBtn");
+  
+  if (prev) prev.addEventListener("click", () => showOffset(currentViewOffsetDays - 1));
+  if (next) next.addEventListener("click", () => showOffset(currentViewOffsetDays + 1));
+  if (today) today.addEventListener("click", () => {
+    manualView = false;
+    displayMenu();
+  });
+
+  loadSavedData();
+});
+
+// Expose for onclick handler
+window.clearSavedData = clearSavedData;
+    </script>
   </body>
 </html>
