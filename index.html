@@ -403,7 +403,7 @@ let viewedOffsetDays = 0;
 let currentViewOffsetDays = 0;
 
 // PDF file path in repository
-const PDF_PATH = '/menu.pdf';
+const PDF_PATH = './menu.pdf';
 
 // HARDCODED START DATE - Change this when uploading new menu
 const MENU_START_DATE = '2025-10-06'; // Format: YYYY-MM-DD
@@ -416,7 +416,7 @@ async function loadPdfFromRepo() {
     
     const response = await fetch(PDF_PATH);
     if (!response.ok) {
-      throw new Error('Menu PDF not found');
+      throw new Error(`Menu PDF not found (Status: ${response.status}). Path: ${PDF_PATH}`);
     }
     
     const arrayBuffer = await response.arrayBuffer();
