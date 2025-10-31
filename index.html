@@ -569,14 +569,18 @@ function displayMenu() {
   }
 
   const diffTime = targetDate - startDate;
-  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
   const totalDays = menuData.weeks.length * 7;
 
-  if (diffDays < 0 || diffDays >= totalDays) {
-    document.getElementById("message").innerHTML = '<div class="error">❌ Date is outside menu range</div>';
-    updateNavButtons(diffDays, totalDays);
-    return;
+  // Handle dates before menu start (cycle backwards)
+  if (diffDays < 0) {
+    // Calculate how many complete cycles back we need to go
+    const cyclesBack = Math.ceil(Math.abs(diffDays) / totalDays);
+    diffDays = diffDays + (cyclesBack * totalDays);
   }
+
+  // Make menu circular - cycle back to Week 1 after Week 4
+  diffDays = diffDays % totalDays;
 
   const weekIndex = Math.floor(diffDays / 7);
   const dayIndex = diffDays % 7;
@@ -633,10 +637,11 @@ function displayMenu() {
 }
 
 function updateNavButtons(diffDays, totalDays) {
+  // Since menu is circular, navigation buttons are always enabled
   const prev = document.getElementById("prevDayBtn");
   const next = document.getElementById("nextDayBtn");
-  if (prev) prev.disabled = diffDays <= 0;
-  if (next) next.disabled = diffDays >= totalDays - 1;
+  if (prev) prev.disabled = false;
+  if (next) next.disabled = false;
 }
 
 // ========== INITIALIZATION ==========
