@@ -488,9 +488,11 @@ function parseMenu(text) {
         // 4) Final fallback: split roughly in half
         let splitIndex = -1;
 
-        // 1) explicit 'Dinner' marker
-        const dinnerMarker = content.search(/\bDinner\b|\bdinner\b/);
-        if (dinnerMarker >= 0) splitIndex = dinnerMarker;
+  // 1) explicit 'Dinner' marker
+  const dinnerMarker = content.search(/\bDinner\b|\bdinner\b/);
+  if (dinnerMarker >= 0) splitIndex = dinnerMarker;
+  // Flag to indicate chunk-based split already produced lunch/dinner strings
+  let chunkHandled = false;
 
         // Chunk-based split: split content by '+' into chunks and look for the
         // first chunk that contains a dinner keyword. This helps handle cases like
@@ -542,7 +544,7 @@ function parseMenu(text) {
 
           if (chunkBoundary >= 0) {
             const lunchChunks = chunks.slice(0, chunkBoundary);
-            if (intraChunkSplit && intraChunkSplit.chunkIndex === chunkBoundary) {
+              if (intraChunkSplit && intraChunkSplit.chunkIndex === chunkBoundary) {
               const chunkText = chunks[chunkBoundary];
               const idx = chunkText.toLowerCase().indexOf(intraChunkSplit.keyword);
               const leftPart = chunkText.substring(0, idx).trim();
@@ -551,11 +553,11 @@ function parseMenu(text) {
               lunch = lunchChunks.join(' + ');
               const dinnerChunks = [rightPart].concat(chunks.slice(chunkBoundary + 1));
               dinner = dinnerChunks.join(' + ');
-              splitIndex = 1; // handled
+                chunkHandled = true; // handled by chunk split
             } else {
               lunch = chunks.slice(0, chunkBoundary).join(' + ');
               dinner = chunks.slice(chunkBoundary).join(' + ');
-              splitIndex = 1;
+                chunkHandled = true;
             }
           }
         }
@@ -589,8 +591,8 @@ function parseMenu(text) {
           }
         }
 
-        // 4) perform split if we have a candidate
-        if (splitIndex > 0) {
+  // 4) perform split if we have a candidate (and chunk logic didn't already handle it)
+  if (splitIndex > 0 && !chunkHandled) {
           let splitAt = splitIndex;
           // If splitIndex points at a '+' character, handle it specially so we don't lose the plus
           if (content[splitAt] === '+') {
