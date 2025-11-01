@@ -481,27 +481,107 @@ function parseMenu(text) {
         let lunch = "Not available";
         let dinner = "Not available";
 
-        const dinnerKeywords = ["Biryani", "Nihari", "Haleem", "Karahi", "Korma", "Handi", "Qeema", "Pulao", "Palak", "Murgh Channa", "Special", "Nuggets", "Macaroni", "Pasta", "Gosht"];
+        // Improved dinner-splitting heuristics
+        // 1) If the text contains an explicit 'Dinner' marker, split there
+        // 2) If the PDF used '+' as a visual separator (e.g. "... Daal Chawal + Nuggets"), split at the last '+'
+        // 3) Fall back to looking for common dinner dish keywords (earliest reasonable occurrence)
+        // 4) Final fallback: split roughly in half
         let splitIndex = -1;
 
-        for (const keyword of dinnerKeywords) {
-          const regex = new RegExp("\\b" + keyword + "\\b", "i");
-          const keywordMatch = content.match(regex);
-          if (keywordMatch) {
-            const idx = content.lastIndexOf(keywordMatch[0]);
-            if (idx > splitIndex) {
-              splitIndex = idx;
+        // 1) explicit 'Dinner' marker
+        const dinnerMarker = content.search(/\bDinner\b|\bdinner\b/);
+        if (dinnerMarker >= 0) splitIndex = dinnerMarker;
+
+        // 2) '+' separator often indicates continuation -> use last '+' as split point
+        // However '+' is frequently used within dinner item lists (e.g. "Daal Chawal + Nuggets").
+        // Prefer an earlier dinner keyword (if present before '+') so that items like
+        // "Daal Chawal + Nuggets" remain grouped as dinner rather than splitting at '+' and
+        // leaving the earlier dinner tokens attached to lunch.
+        if (splitIndex < 0) {
+          const plusIdx = content.lastIndexOf('+');
+          if (plusIdx >= 0) {
+            // look for an earlier dinner keyword that appears before the '+' and prefer it
+            const dinnerKeywordsBeforePlus = ["Daal", "Chawal", "Biryani", "Pulao", "Rice", "Murgh", "Gosht", "Nuggets"];
+            let chosenBeforePlus = -1;
+            for (const kw of dinnerKeywordsBeforePlus) {
+              const re = new RegExp("\\b" + kw + "\\b", "ig");
+              let m;
+              while ((m = re.exec(content)) !== null) {
+                if (m.index < plusIdx) {
+                  if (chosenBeforePlus === -1 || m.index < chosenBeforePlus) chosenBeforePlus = m.index;
+                }
+              }
+            }
+            if (chosenBeforePlus >= 0) {
+              splitIndex = chosenBeforePlus;
+            } else {
+              splitIndex = plusIdx;
             }
           }
         }
 
-        if (splitIndex > 0) {
-          let wordStart = splitIndex;
-          while (wordStart > 0 && content[wordStart - 1] !== " ") {
-            wordStart--;
+        // 3) look for common dinner keywords — choose the earliest reasonable occurrence
+        if (splitIndex < 0) {
+          const dinnerKeywords = [
+            "Biryani", "Nihari", "Haleem", "Karahi", "Korma", "Handi", "Qeema", "Pulao", "Palak",
+            "Murgh", "Special", "Nuggets", "Macaroni", "Pasta", "Gosht", "Rice", "Chawal", "Daal"
+          ];
+
+          const occurrences = [];
+          for (const keyword of dinnerKeywords) {
+            const re = new RegExp("\\b" + keyword + "\\b", "ig");
+            let m;
+            while ((m = re.exec(content)) !== null) {
+              occurrences.push(m.index);
+            }
           }
-          lunch = content.substring(0, wordStart).trim();
-          dinner = content.substring(wordStart).trim();
+
+          if (occurrences.length > 0) {
+            occurrences.sort((a, b) => a - b);
+            for (const idx of occurrences) {
+              const leftWords = content.substring(0, idx).trim().split(/\s+/).filter(Boolean).length;
+              const rightWords = content.substring(idx).trim().split(/\s+/).filter(Boolean).length;
+              if (leftWords >= 1 && rightWords >= 1) {
+                splitIndex = idx;
+                break;
+              }
+            }
+          }
+        }
+
+        // 4) perform split if we have a candidate
+        if (splitIndex > 0) {
+          let splitAt = splitIndex;
+          // If splitIndex points at a '+' character, handle it specially so we don't lose the plus
+          if (content[splitAt] === '+') {
+            const left = content.substring(0, splitAt).trim();
+            const right = content.substring(splitAt + 1).trim();
+
+            if (!right) {
+              const words = content.split(" ");
+              const mid = Math.floor(words.length / 2);
+              lunch = words.slice(0, mid).join(" ");
+              dinner = words.slice(mid).join(" ");
+            } else {
+              lunch = left;
+              dinner = right;
+            }
+          } else {
+            let left = content.substring(0, splitAt).trim();
+            let right = content.substring(splitAt).trim();
+            right = right.replace(/^Dinner[:\-\s]*/i, "").trim();
+
+            const remainingWords = right.split(/\s+/).filter(Boolean).length;
+            if (remainingWords < 1) {
+              const words = content.split(" ");
+              const mid = Math.floor(words.length / 2);
+              lunch = words.slice(0, mid).join(" ");
+              dinner = words.slice(mid).join(" ");
+            } else {
+              lunch = left;
+              dinner = right;
+            }
+          }
         } else {
           const words = content.split(" ");
           const mid = Math.floor(words.length / 2);
