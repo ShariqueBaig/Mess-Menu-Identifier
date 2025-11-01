@@ -506,41 +506,57 @@ function parseMenu(text) {
           let intraChunkSplit = null; // {idx,chunkIndex,keyword}
 
           // First pass: prefer strong keywords in later chunks (avoid splitting at first chunk)
-          for (let i = 1; i < chunks.length; i++) {
-            const chunk = chunks[i];
-            const lower = chunk.toLowerCase();
-            for (const kw of strongDinnerKeywords) {
-              const kidx = lower.indexOf(kw);
-              if (kidx >= 0) {
-                chunkBoundary = i;
-                if (kidx > 0) intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
-                break;
-              }
-            }
-            if (chunkBoundary >= 0) break;
-          }
-
-          // Second pass: if no strong match, try weak keywords but prefer non-first chunk
-          if (chunkBoundary < 0) {
-            let firstWeak = -1;
-            for (let i = 0; i < chunks.length; i++) {
+            for (let i = 1; i < chunks.length; i++) {
               const chunk = chunks[i];
               const lower = chunk.toLowerCase();
-              for (const kw of weakDinnerKeywords) {
+              for (const kw of strongDinnerKeywords) {
                 const kidx = lower.indexOf(kw);
                 if (kidx >= 0) {
-                  if (firstWeak === -1) firstWeak = i;
-                  if (i > 0) {
-                    chunkBoundary = i;
-                    if (kidx > 0) intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
-                    break;
+                  chunkBoundary = i;
+                  if (kidx > 0) {
+                    // Only split inside a chunk when the left fragment looks like a small
+                    // accompaniment (salad, raita, tang, etc.) or contains non-letter chars
+                    const leftCandidate = chunk.substring(0, kidx).trim().toLowerCase();
+                    const smallLeftWords = ['salad','raita','tang','rooh','afza','chutney','pickle','sauce'];
+                    const leftWords = leftCandidate.split(/\s+/).filter(Boolean);
+                    if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate)) {
+                      intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                    }
                   }
+                  break;
                 }
               }
               if (chunkBoundary >= 0) break;
             }
-            if (chunkBoundary < 0 && firstWeak >= 0) chunkBoundary = firstWeak;
-          }
+
+          // Second pass: if no strong match, try weak keywords but prefer non-first chunk
+            if (chunkBoundary < 0) {
+              let firstWeak = -1;
+              for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                const lower = chunk.toLowerCase();
+                for (const kw of weakDinnerKeywords) {
+                  const kidx = lower.indexOf(kw);
+                  if (kidx >= 0) {
+                    if (firstWeak === -1) firstWeak = i;
+                    if (i > 0) {
+                      chunkBoundary = i;
+                      if (kidx > 0) {
+                        const leftCandidate = chunk.substring(0, kidx).trim().toLowerCase();
+                        const smallLeftWords = ['salad','raita','tang','rooh','afza','chutney','pickle','sauce'];
+                        const leftWords = leftCandidate.split(/\s+/).filter(Boolean);
+                        if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate)) {
+                          intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                        }
+                      }
+                      break;
+                    }
+                  }
+                }
+                if (chunkBoundary >= 0) break;
+              }
+              if (chunkBoundary < 0 && firstWeak >= 0) chunkBoundary = firstWeak;
+            }
 
           if (chunkBoundary >= 0) {
             const lunchChunks = chunks.slice(0, chunkBoundary);

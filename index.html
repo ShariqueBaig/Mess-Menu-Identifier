@@ -20,216 +20,228 @@ body {
 
 .container {
   max-width: 800px;
-  margin: 0 auto;
-  background: white;
-  border-radius: 20px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-  overflow: hidden;
-  position: relative;
-}
+  function parseMenu(text) {
+    menuData = { weeks: [] };
+    text = text.replace(/\s+/g, " ");
+    const weekPattern = /Week (\d+)(.*?)(?=Week \d+|$)/gs;
+    const weekMatches = [...text.matchAll(weekPattern)];
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 
-.header {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 30px;
-  position: relative;
-  text-align: center;
-}
+    for (let w = 0; w < weekMatches.length && w < 4; w++) {
+      const weekText = weekMatches[w][2];
+      const weekData = { days: [] };
 
-.header h1 {
-  font-size: 2em;
-  margin-bottom: 10px;
-}
+      for (let d = 0; d < days.length; d++) {
+        const day = days[d];
+        const nextDay = days[d + 1];
+        let pattern;
 
-.admin-btn {
-  position: absolute;
-  right: 30px;
-  top: 28px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  color: white;
-  padding: 8px 14px;
-  border-radius: 12px;
-  cursor: pointer;
-  font-weight: bold;
-}
+        if (nextDay) {
+          pattern = new RegExp(day + "\\s+Breakfast\\*?\\s+(.*?)\\s+" + nextDay, "s");
+        } else {
+          pattern = new RegExp(day + "\\s+Breakfast\\*?\\s+(.*?)(?=Breakfast\\*\\s*:|Week|$)", "s");
+        }
 
-.header p {
-  opacity: 0.9;
-  font-size: 1.1em;
-}
+        const match = weekText.match(pattern);
 
-.content {
-  padding: 30px;
-}
+        if (match) {
+          let content = match[1].trim();
+          content = content.replace(/\s+/g, " ").trim();
 
-.upload-section {
-  text-align: center;
-  padding: 40px 20px;
-  border: 3px dashed #667eea;
-  border-radius: 15px;
-  background: #f8f9ff;
-  margin-bottom: 30px;
-  cursor: pointer;
-  transition: all 0.3s;
-  position: relative;
-}
+          let lunch = "Not available";
+          let dinner = "Not available";
 
-.upload-section:hover {
-  background: #f0f2ff;
-  border-color: #764ba2;
-}
+          // Improved dinner-splitting heuristics
+          // 1) If the text contains an explicit 'Dinner' marker, split there
+          // 2) If the PDF used '+' as a visual separator (e.g. "... Daal Chawal + Nuggets"), split at the last '+'
+          // 3) Fall back to looking for common dinner dish keywords (earliest reasonable occurrence)
+          // 4) Final fallback: split roughly in half
+          let splitIndex = -1;
 
-.upload-section input {
-  display: none;
-}
+    // 1) explicit 'Dinner' marker
+    const dinnerMarker = content.search(/\bDinner\b|\bdinner\b/);
+    if (dinnerMarker >= 0) splitIndex = dinnerMarker;
+    // Flag to indicate chunk-based split already produced lunch/dinner strings
+    let chunkHandled = false;
 
-.upload-btn {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 15px 40px;
-  border: none;
-  border-radius: 30px;
-  font-size: 1.1em;
-  cursor: pointer;
-  transition: transform 0.2s;
-}
+          // Chunk-based split: split content by '+' into chunks and look for the
+          // first chunk that contains a dinner keyword. This helps handle cases like
+          // "... Salad Murgh Channa + Chipaati" where there's no '+' between Salad
+          // and Murgh; we'll split inside the chunk at the dinner keyword.
+          if (splitIndex < 0 && content.indexOf('+') >= 0) {
+            const chunks = content.split('+').map(c => c.trim()).filter(Boolean);
+            const strongDinnerKeywords = ["murgh","channa","chana","daal","chawal","nuggets","gosht","karahi","nihari","haleem"];
+            const weakDinnerKeywords = ["biryani","pasta","macaroni","rice","pulao","special","korma","handi","qeema","palak"];
+            let chunkBoundary = -1;
+            let intraChunkSplit = null; // {idx,chunkIndex,keyword}
 
-.upload-btn:hover {
-  transform: scale(1.05);
-}
+            // First pass: prefer strong keywords in later chunks (avoid splitting at first chunk)
+            for (let i = 1; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              const lower = chunk.toLowerCase();
+              for (const kw of strongDinnerKeywords) {
+                const kidx = lower.indexOf(kw);
+                if (kidx >= 0) {
+                  chunkBoundary = i;
+                  if (kidx > 0) {
+                    // Only split inside a chunk when the left fragment looks like a small
+                    // accompaniment (salad, raita, tang, etc.) or contains non-letter chars
+                    const leftCandidate = chunk.substring(0, kidx).trim().toLowerCase();
+                    const smallLeftWords = ['salad','raita','tang','rooh','afza','chutney','pickle','sauce'];
+                    const leftWords = leftCandidate.split(/\s+/).filter(Boolean);
+                    if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate)) {
+                      intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                    }
+                  }
+                  break;
+                }
+              }
+              if (chunkBoundary >= 0) break;
+            }
 
-.clear-btn {
-  background: #e74c3c;
-  color: white;
-  padding: 10px 25px;
-  border: none;
-  border-radius: 20px;
-  font-size: 0.9em;
-  cursor: pointer;
-  margin-top: 15px;
-  transition: transform 0.2s;
-}
+            // Second pass: if no strong match, try weak keywords but prefer non-first chunk
+            if (chunkBoundary < 0) {
+              let firstWeak = -1;
+              for (let i = 0; i < chunks.length; i++) {
+                const chunk = chunks[i];
+                const lower = chunk.toLowerCase();
+                for (const kw of weakDinnerKeywords) {
+                  const kidx = lower.indexOf(kw);
+                  if (kidx >= 0) {
+                    if (firstWeak === -1) firstWeak = i;
+                    if (i > 0) {
+                      chunkBoundary = i;
+                      if (kidx > 0) {
+                        const leftCandidate = chunk.substring(0, kidx).trim().toLowerCase();
+                        const smallLeftWords = ['salad','raita','tang','rooh','afza','chutney','pickle','sauce'];
+                        const leftWords = leftCandidate.split(/\s+/).filter(Boolean);
+                        if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate)) {
+                          intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                        }
+                      }
+                      break;
+                    }
+                  }
+                }
+                if (chunkBoundary >= 0) break;
+              }
+              if (chunkBoundary < 0 && firstWeak >= 0) chunkBoundary = firstWeak;
+            }
 
-.clear-btn:hover {
-  transform: scale(1.05);
-}
+            if (chunkBoundary >= 0) {
+              const lunchChunks = chunks.slice(0, chunkBoundary);
+              if (intraChunkSplit && intraChunkSplit.chunkIndex === chunkBoundary) {
+                const chunkText = chunks[chunkBoundary];
+                const idx = chunkText.toLowerCase().indexOf(intraChunkSplit.keyword);
+                const leftPart = chunkText.substring(0, idx).trim();
+                const rightPart = chunkText.substring(idx).trim();
+                if (leftPart) lunchChunks.push(leftPart);
+                lunch = lunchChunks.join(' + ');
+                const dinnerChunks = [rightPart].concat(chunks.slice(chunkBoundary + 1));
+                dinner = dinnerChunks.join(' + ');
+                chunkHandled = true; // handled by chunk split
+              } else {
+                lunch = chunks.slice(0, chunkBoundary).join(' + ');
+                dinner = chunks.slice(chunkBoundary).join(' + ');
+                chunkHandled = true;
+              }
+            }
+          }
 
-.date-input-section {
-  margin: 20px 0;
-  padding: 20px;
-  background: #f8f9ff;
-  border-radius: 10px;
-}
+          // 3) look for common dinner keywords — choose the earliest reasonable occurrence
+          // (previously we picked the last occurrence which could end up splitting at a
+          // late token like 'Nuggets' and leave earlier dinner items assigned to lunch)
+          if (splitIndex < 0) {
+            const dinnerKeywords = [
+              "Biryani", "Nihari", "Haleem", "Karahi", "Korma", "Handi", "Qeema", "Pulao", "Palak",
+              "Murgh", "Special", "Nuggets", "Macaroni", "Pasta", "Gosht", "Rice", "Chawal", "Daal"
+            ];
 
-.date-input-section label {
-  display: block;
-  margin-bottom: 10px;
-  font-weight: bold;
-  color: #667eea;
-}
+            // collect all occurrences of any keyword and prefer the earliest one that
+            // leaves at least one word on both sides
+            const occurrences = [];
+            for (const keyword of dinnerKeywords) {
+              const re = new RegExp("\\b" + keyword + "\\b", "ig");
+              let m;
+              while ((m = re.exec(content)) !== null) {
+                occurrences.push(m.index);
+              }
+            }
 
-.date-input-section input {
-  width: 100%;
-  padding: 12px;
-  border: 2px solid #667eea;
-  border-radius: 8px;
-  font-size: 1em;
-}
+            if (occurrences.length > 0) {
+              occurrences.sort((a, b) => a - b);
+              for (const idx of occurrences) {
+                const leftWords = content.substring(0, idx).trim().split(/\s+/).filter(Boolean).length;
+                const rightWords = content.substring(idx).trim().split(/\s+/).filter(Boolean).length;
+                if (leftWords >= 1 && rightWords >= 1) {
+                  splitIndex = idx;
+                  break;
+                }
+              }
+            }
+          }
 
-.menu-display {
-  display: none;
-}
+    // 4) perform split if we have a candidate (and chunk logic didn't already handle it)
+    if (splitIndex > 0 && !chunkHandled) {
+            let splitAt = splitIndex;
+            // If splitIndex points at a '+' character, handle it specially so we don't lose the plus
+            if (content[splitAt] === '+') {
+              const left = content.substring(0, splitAt).trim();
+              const right = content.substring(splitAt + 1).trim();
 
-.nav-day-btn {
-  position: absolute;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.12);
-  background: linear-gradient(135deg, #6b7df0 0%, #5b63d6 100%);
-  color: #fff;
-  font-size: 1.25em;
-  cursor: pointer;
-  box-shadow: 0 12px 30px rgba(55, 63, 172, 0.28);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease;
-  z-index: 1200;
-}
+              if (!right) {
+                const words = content.split(" ");
+                const mid = Math.floor(words.length / 2);
+                lunch = words.slice(0, mid).join(" ");
+                dinner = words.slice(mid).join(" ");
+              } else {
+                lunch = left;
+                dinner = right;
+              }
+            } else {
+              let left = content.substring(0, splitAt).trim();
+              let right = content.substring(splitAt).trim();
+              right = right.replace(/^Dinner[:\-\s]*/i, "").trim();
 
-.nav-day-btn:hover:not(:disabled) {
-  transform: scale(1.06);
-  box-shadow: 0 18px 40px rgba(55, 63, 172, 0.36);
-}
+              const remainingWords = right.split(/\s+/).filter(Boolean).length;
+              if (remainingWords < 1) {
+                const words = content.split(" ");
+                const mid = Math.floor(words.length / 2);
+                lunch = words.slice(0, mid).join(" ");
+                dinner = words.slice(mid).join(" ");
+              } else {
+                lunch = left;
+                dinner = right;
+              }
+            }
+          } else {
+            const words = content.split(" ");
+            const mid = Math.floor(words.length / 2);
+            lunch = words.slice(0, mid).join(" ");
+            dinner = words.slice(mid).join(" ");
+          }
 
-.nav-day-btn:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
+          lunch = lunch || "Not available";
+          dinner = dinner || "Not available";
 
-#prevDayBtn {
-  left: 16px;
-  top: 45%;
-}
-#nextDayBtn {
-  right: 16px;
-  top: 45%;
-}
+          const dayData = {
+            name: day,
+            breakfast: day === "Sunday" ? "Special Breakfast (Halwa + Puri/Kulchay + Channa + Banana Shake/Lassi)" : "Standard Breakfast (Half fry, Full fry, Omlete, Khakina, Bread, Yoghurt, Blueband, Tea, Paratha, Chipati)",
+            lunch: lunch,
+            dinner: dinner,
+          };
 
-#todayBtn {
-  position: absolute;
-  right: 18px;
-  bottom: 18px;
-  padding: 10px 14px;
-  border-radius: 10px;
-  border: none;
-  background: linear-gradient(90deg, #4f7cf6, #2f5bd6);
-  color: #fff;
-  cursor: pointer;
-  box-shadow: 0 10px 30px rgba(47, 91, 214, 0.18);
-  font-weight: 600;
-  z-index: 40;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
-}
+          weekData.days.push(dayData);
+        }
+      }
 
-#todayBtn:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 16px 40px rgba(47, 91, 214, 0.22);
-}
-
-@media (max-width: 640px) {
-  .nav-day-btn {
-    width: 46px;
-    height: 46px;
-    font-size: 1.05em;
+      if (weekData.days.length > 0) {
+        menuData.weeks.push(weekData);
+      }
+    }
+  
+    return menuData;
   }
-  #prevDayBtn {
-    left: 8px;
-    top: 45%;
-  }
-  #nextDayBtn {
-    right: 8px;
-    top: 45%;
-  }
-  #todayBtn {
-    right: 12px;
-    bottom: 18px;
-  }
-}
-
-.current-info {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  padding: 25px;
-  border-radius: 15px;
-  margin-bottom: 25px;
-}
-
-.current-info h2 {
-  font-size: 1.5em;
-  margin-bottom: 15px;
 }
 
 .info-grid {
@@ -523,28 +535,28 @@ function parseMenu(text) {
             // Second pass: if no strong match, try weak keywords but prefer non-first chunk
             if (chunkBoundary < 0) {
               let firstWeak = -1;
-              for (let i = 0; i < chunks.length; i++) {
+              for (let i = 1; i < chunks.length; i++) {
                 const chunk = chunks[i];
                 const lower = chunk.toLowerCase();
-                for (const kw of weakDinnerKeywords) {
+                for (const kw of strongDinnerKeywords) {
                   const kidx = lower.indexOf(kw);
                   if (kidx >= 0) {
-                    if (firstWeak === -1) firstWeak = i;
-                    if (i > 0) {
-                      chunkBoundary = i;
-                      if (kidx > 0) intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
-                      break;
+                    chunkBoundary = i;
+                    if (kidx > 0) {
+                      // Only split inside a chunk when the left fragment looks like a small
+                      // accompaniment (salad, raita, tang, etc.) or contains non-letter chars
+                      const leftCandidate = chunk.substring(0, kidx).trim().toLowerCase();
+                      const smallLeftWords = ['salad','raita','tang','rooh','afza','chutney','pickle','sauce'];
+                      const leftWords = leftCandidate.split(/\s+/).filter(Boolean);
+                      if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate)) {
+                        intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                      }
                     }
+                    break;
                   }
                 }
                 if (chunkBoundary >= 0) break;
               }
-              if (chunkBoundary < 0 && firstWeak >= 0) chunkBoundary = firstWeak;
-            }
-
-            if (chunkBoundary >= 0) {
-              const lunchChunks = chunks.slice(0, chunkBoundary);
-              if (intraChunkSplit && intraChunkSplit.chunkIndex === chunkBoundary) {
                 const chunkText = chunks[chunkBoundary];
                 const idx = chunkText.toLowerCase().indexOf(intraChunkSplit.keyword);
                 const leftPart = chunkText.substring(0, idx).trim();
