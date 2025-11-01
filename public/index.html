@@ -581,6 +581,20 @@ function parseMenu(text) {
           }
         }
 
+        // If chunk-based logic produced a dinner that ends with 'Special' (e.g. "Achaar Special"),
+        // move the non-'Special' portion back into lunch and make dinner exactly 'Special'.
+        if (chunkHandled && typeof dinner === 'string') {
+          const specialTail = dinner.match(/^(.*)\b(special)\s*$/i);
+          if (specialTail) {
+            const leftPart = (specialTail[1] || '').trim();
+            if (leftPart) {
+              if (lunch && lunch !== 'Not available') lunch = lunch + ' + ' + leftPart;
+              else lunch = leftPart;
+            }
+            dinner = 'Special';
+          }
+        }
+
         // 3) look for common dinner keywords — choose the earliest reasonable occurrence
         if (splitIndex < 0) {
           const dinnerKeywords = [
@@ -652,6 +666,27 @@ function parseMenu(text) {
 
         lunch = lunch || "Not available";
         dinner = dinner || "Not available";
+
+        // Always normalize trailing 'Special' in dinner: if dinner ends with something
+        // like 'Achaar Special', move the non-'Special' part into lunch and set
+        // dinner to exactly 'Special'. This handles cases where accompaniments
+        // precede the word Special in the same dinner chunk.
+        try {
+          const specialMatch = (dinner || '').toString().match(/^(.*)\b(special)\s*$/i);
+          if (specialMatch) {
+            const left = (specialMatch[1] || '').trim();
+            if (left) {
+              // sanitize trailing/leading '+' from existing lunch or left part
+              const existingLunch = (lunch && lunch !== 'Not available') ? lunch.replace(/\s*\+\s*$/,'').trim() : '';
+              const leftClean = left.replace(/^\+|\+$/g,'').trim();
+              if (existingLunch && leftClean) lunch = existingLunch + ' + ' + leftClean;
+              else lunch = existingLunch || leftClean || 'Not available';
+            }
+            dinner = 'Special';
+          }
+        } catch (e) {
+          // ignore any unexpected errors during normalization
+        }
 
         const dayData = {
           name: day,
