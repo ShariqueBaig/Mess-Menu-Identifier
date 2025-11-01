@@ -516,10 +516,13 @@ function parseMenu(text) {
                   if (kidx > 0) {
                     // Only split inside a chunk when the left fragment looks like a small
                     // accompaniment (salad, raita, tang, etc.) or contains non-letter chars
+                    // OR when this is the last chunk (so trailing words like "Achaar Special"
+                    // can be split into lunch + 'Special'). This avoids mis-splitting
+                    // earlier chunks like 'Chicken Karahi' which are followed by other chunks.
                     const leftCandidate = chunk.substring(0, kidx).trim().toLowerCase();
                     const smallLeftWords = ['salad','raita','tang','rooh','afza','chutney','pickle','sauce'];
                     const leftWords = leftCandidate.split(/\s+/).filter(Boolean);
-                    if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate)) {
+                    if (leftWords.some(w => smallLeftWords.includes(w)) || /[^a-zA-Z\s]/.test(leftCandidate) || i === chunks.length - 1) {
                       intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
                     }
                   }
