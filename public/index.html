@@ -492,30 +492,70 @@ function parseMenu(text) {
         const dinnerMarker = content.search(/\bDinner\b|\bdinner\b/);
         if (dinnerMarker >= 0) splitIndex = dinnerMarker;
 
-        // 2) '+' separator often indicates continuation -> use last '+' as split point
-        // However '+' is frequently used within dinner item lists (e.g. "Daal Chawal + Nuggets").
-        // Prefer an earlier dinner keyword (if present before '+') so that items like
-        // "Daal Chawal + Nuggets" remain grouped as dinner rather than splitting at '+' and
-        // leaving the earlier dinner tokens attached to lunch.
-        if (splitIndex < 0) {
-          const plusIdx = content.lastIndexOf('+');
-          if (plusIdx >= 0) {
-            // look for an earlier dinner keyword that appears before the '+' and prefer it
-            const dinnerKeywordsBeforePlus = ["Daal", "Chawal", "Biryani", "Pulao", "Rice", "Murgh", "Gosht", "Nuggets"];
-            let chosenBeforePlus = -1;
-            for (const kw of dinnerKeywordsBeforePlus) {
-              const re = new RegExp("\\b" + kw + "\\b", "ig");
-              let m;
-              while ((m = re.exec(content)) !== null) {
-                if (m.index < plusIdx) {
-                  if (chosenBeforePlus === -1 || m.index < chosenBeforePlus) chosenBeforePlus = m.index;
-                }
+        // Chunk-based split: split content by '+' into chunks and look for the
+        // first chunk that contains a dinner keyword. This helps handle cases like
+        // "... Salad Murgh Channa + Chipaati" where there's no '+' between Salad
+        // and Murgh; we'll split inside the chunk at the dinner keyword.
+        if (splitIndex < 0 && content.indexOf('+') >= 0) {
+          const chunks = content.split('+').map(c => c.trim()).filter(Boolean);
+          const strongDinnerKeywords = ["murgh","channa","chana","daal","chawal","nuggets","gosht","karahi","nihari","haleem"];
+          const weakDinnerKeywords = ["biryani","pasta","macaroni","rice","pulao","special","korma","handi","qeema","palak"];
+          let chunkBoundary = -1;
+          let intraChunkSplit = null; // {idx,chunkIndex,keyword}
+
+          // First pass: prefer strong keywords in later chunks (avoid splitting at first chunk)
+          for (let i = 1; i < chunks.length; i++) {
+            const chunk = chunks[i];
+            const lower = chunk.toLowerCase();
+            for (const kw of strongDinnerKeywords) {
+              const kidx = lower.indexOf(kw);
+              if (kidx >= 0) {
+                chunkBoundary = i;
+                if (kidx > 0) intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                break;
               }
             }
-            if (chosenBeforePlus >= 0) {
-              splitIndex = chosenBeforePlus;
+            if (chunkBoundary >= 0) break;
+          }
+
+          // Second pass: if no strong match, try weak keywords but prefer non-first chunk
+          if (chunkBoundary < 0) {
+            let firstWeak = -1;
+            for (let i = 0; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              const lower = chunk.toLowerCase();
+              for (const kw of weakDinnerKeywords) {
+                const kidx = lower.indexOf(kw);
+                if (kidx >= 0) {
+                  if (firstWeak === -1) firstWeak = i;
+                  if (i > 0) {
+                    chunkBoundary = i;
+                    if (kidx > 0) intraChunkSplit = { idx: kidx, chunkIndex: i, keyword: kw };
+                    break;
+                  }
+                }
+              }
+              if (chunkBoundary >= 0) break;
+            }
+            if (chunkBoundary < 0 && firstWeak >= 0) chunkBoundary = firstWeak;
+          }
+
+          if (chunkBoundary >= 0) {
+            const lunchChunks = chunks.slice(0, chunkBoundary);
+            if (intraChunkSplit && intraChunkSplit.chunkIndex === chunkBoundary) {
+              const chunkText = chunks[chunkBoundary];
+              const idx = chunkText.toLowerCase().indexOf(intraChunkSplit.keyword);
+              const leftPart = chunkText.substring(0, idx).trim();
+              const rightPart = chunkText.substring(idx).trim();
+              if (leftPart) lunchChunks.push(leftPart);
+              lunch = lunchChunks.join(' + ');
+              const dinnerChunks = [rightPart].concat(chunks.slice(chunkBoundary + 1));
+              dinner = dinnerChunks.join(' + ');
+              splitIndex = 1; // handled
             } else {
-              splitIndex = plusIdx;
+              lunch = chunks.slice(0, chunkBoundary).join(' + ');
+              dinner = chunks.slice(chunkBoundary).join(' + ');
+              splitIndex = 1;
             }
           }
         }
